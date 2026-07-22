@@ -64,6 +64,64 @@ body {
   font-family: var(--font-jbmono), monospace;
 }
 
+.mn-workbench-home {
+  min-height: calc(100vh - 58px);
+}
+
+.mn-command-stage {
+  max-width: 1320px;
+  margin: 0 auto;
+  display: grid;
+  gap: 10px;
+}
+
+.mn-support-grid {
+  max-width: 1560px;
+  margin: 18px auto 0;
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(300px, 1fr);
+  align-items: stretch;
+  gap: 22px;
+}
+
+.mn-context-panel {
+  padding: 18px 0;
+  border-top: 1px solid var(--line-2);
+  border-bottom: 1px solid var(--line-2);
+}
+
+.mn-support-grid .mn-context-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+.mn-support-grid .mn-memory-panel > div {
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.mn-command-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--line-2);
+  background: var(--panel);
+}
+
+.mn-run-button {
+  width: 100%;
+}
+
+.mn-command-panel .mn-preset-row button {
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+  padding: 8px 10px !important;
+  font-size: 11px !important;
+  white-space: nowrap;
+}
+
 .mn-context-field input,
 .mn-context-field textarea {
   width: 100%;
@@ -73,9 +131,13 @@ body {
   background: #fff;
   color: var(--ink);
   padding: 10px 12px;
-  font: 12.5px/1.45 var(--font-archivo), sans-serif;
+  font: 13px/1.45 var(--font-archivo), sans-serif;
   resize: vertical;
   outline: none;
+}
+
+.mn-context-panel .mn-context-field textarea {
+  resize: none;
 }
 
 .mn-context-field input:focus,
@@ -84,7 +146,261 @@ body {
   box-shadow: 0 0 0 3px var(--accent-bg);
 }
 
+/* ── user-authored spending mandate ──────────────────────────────────── */
+.mn-mandate-tuner {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(20, 40, 90, 0.07);
+  overflow: hidden;
+}
+
+.mn-mandate-tuner-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 18px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line-2);
+}
+
+.mn-mandate-presets {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 3px;
+  border: 1px solid var(--line-3);
+  border-radius: 7px;
+  background: #fff;
+}
+
+.mn-mandate-presets button {
+  border: 0;
+  border-radius: 5px;
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--muted);
+  font: 600 9.5px/1 var(--font-jbmono), monospace;
+  cursor: pointer;
+}
+
+.mn-mandate-presets button.is-active {
+  background: var(--ink);
+  color: #fff;
+}
+
+.mn-mandate-control-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 0.8fr;
+  gap: 28px;
+  padding: 20px 20px 17px;
+}
+
+.mn-range-control {
+  display: block;
+  min-width: 0;
+}
+
+.mn-range-label,
+.mn-range-scale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mn-range-label {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.mn-range-label output {
+  color: var(--ink);
+  font-size: 16px;
+  letter-spacing: 0;
+}
+
+.mn-range-scale {
+  color: var(--faint);
+  font-size: 9px;
+  margin-top: 6px;
+}
+
+.mn-range-control input[type="range"] {
+  --range-progress: 0%;
+  width: 100%;
+  height: 22px;
+  margin: 8px 0 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: grab;
+}
+
+.mn-range-control input[type="range"]:active {
+  cursor: grabbing;
+}
+
+.mn-range-control input[type="range"]::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    #22a65a 0,
+    #2b6bf3 var(--range-progress),
+    #e3e9f3 var(--range-progress),
+    #e3e9f3 100%
+  );
+  box-shadow: inset 0 1px 2px rgba(24, 39, 75, 0.12);
+}
+
+.mn-range-control input[type="range"]::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+  background: #e3e9f3;
+}
+
+.mn-range-control input[type="range"]::-moz-range-progress {
+  height: 8px;
+  border-radius: 4px;
+  background: #2b6bf3;
+}
+
+.mn-range-control input[type="range"]::-webkit-slider-thumb {
+  width: 22px;
+  height: 22px;
+  margin-top: -7px;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 4px solid #fff;
+  border-radius: 50%;
+  background: #2b6bf3;
+  box-shadow: 0 0 0 1px #aac4fb, 0 5px 12px rgba(43, 107, 243, 0.3);
+  transition: transform 140ms ease;
+}
+
+.mn-range-control input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+
+.mn-range-control input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 4px solid #fff;
+  border-radius: 50%;
+  background: #2b6bf3;
+  box-shadow: 0 0 0 1px #aac4fb, 0 5px 12px rgba(43, 107, 243, 0.3);
+}
+
+.mn-range-control input[type="range"]:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.mn-service-stepper {
+  min-width: 0;
+}
+
+.mn-stepper-row {
+  display: grid;
+  grid-template-columns: 30px 1fr 30px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+}
+
+.mn-stepper-row button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-3);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--blue);
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mn-stepper-row button:disabled {
+  color: var(--faint);
+  background: var(--panel);
+  cursor: not-allowed;
+}
+
+.mn-stepper-row output {
+  text-align: center;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.mn-slot-track {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 3px;
+  margin-top: 9px;
+}
+
+.mn-slot-track span {
+  height: 5px;
+  border-radius: 2px;
+  background: #e3e9f3;
+  transition: background 180ms ease, transform 180ms ease;
+}
+
+.mn-slot-track span.is-available {
+  background: #2b6bf3;
+  transform: scaleY(1.35);
+}
+
+.mn-slot-track span[data-filled="true"] {
+  background: #22a65a;
+}
+
+.mn-mandate-apply {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line-2);
+  background: #f8fafc;
+}
+
+.mn-mandate-apply span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.mn-mandate-apply button {
+  border: 0;
+  border-radius: 7px;
+  padding: 10px 15px;
+  background: var(--ink);
+  color: #fff;
+  font: 600 11px/1 var(--font-archivo), sans-serif;
+  cursor: pointer;
+}
+
+@media (max-width: 1200px) {
+  .mn-support-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mn-support-grid .mn-context-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
 @media (max-width: 980px) {
+  .mn-command-footer {
+    grid-template-columns: 1fr;
+  }
+
   .mn-result-layout,
   .mn-checkout-grid,
   .mn-receipt-grid,
@@ -120,6 +436,14 @@ body {
   .mn-checkout-summary {
     border-right: 0 !important;
     border-bottom: 1px solid var(--line-2);
+  }
+
+  .mn-mandate-control-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .mn-service-stepper {
+    grid-column: 1 / -1;
   }
 }
 
@@ -169,6 +493,10 @@ body {
     flex-direction: column;
   }
 
+  .mn-command-footer {
+    grid-template-columns: 1fr;
+  }
+
   .mn-preset-row {
     overflow-x: auto;
     padding-bottom: 3px;
@@ -191,6 +519,25 @@ body {
 
   .mn-capability-probe {
     padding: 16px !important;
+  }
+
+  .mn-mandate-tuner-head,
+  .mn-mandate-apply {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mn-mandate-presets,
+  .mn-mandate-control-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mn-service-stepper {
+    grid-column: auto;
+  }
+
+  .mn-mandate-apply button {
+    width: 100%;
   }
 
   .mn-scout-grid {
@@ -331,6 +678,27 @@ body {
 @keyframes mngrow {
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
+}
+
+/* ── procuring: ambient scout columns ─────────────────────────────────── */
+.mn-procuring-side {
+  position: absolute;
+  top: 132px;
+  width: 232px;
+  z-index: 1;
+  pointer-events: none;
+}
+.mn-side-left { left: 56px; }
+.mn-side-right { right: 56px; }
+@media (max-width: 1240px) {
+  .mn-procuring-side { display: none; }
+}
+@keyframes mnwhisper {
+  0%, 100% { opacity: 0.16; }
+  45%, 70% { opacity: 0.62; }
+}
+@keyframes mntick {
+  to { stroke-dashoffset: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

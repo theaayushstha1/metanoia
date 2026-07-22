@@ -23,7 +23,7 @@ export default async function CheckoutPage({
 
   return (
     <main style={{ minHeight: "100vh" }}>
-      <div style={{ minHeight: "100vh", background: "#fff" }}>
+      <div style={{ minHeight: "100vh", background: "#fff", display: "flex", flexDirection: "column" }}>
         <TopBar
           tag="CHECKOUT"
           right={
@@ -32,16 +32,20 @@ export default async function CheckoutPage({
             </Pill>
           }
         />
-        <div className="mn-checkout-grid" style={{ display: "grid", gridTemplateColumns: "1fr 460px", minHeight: 560 }}>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px", background: "radial-gradient(720px 420px at 50% -40px,rgba(77,140,255,.07),transparent)" }}>
+        <div className="mn-checkout-grid" style={{ display: "grid", gridTemplateColumns: "1fr 420px", width: "100%", maxWidth: 1000, borderRadius: 20, overflow: "hidden", border: "1px solid var(--line)", boxShadow: "0 24px 64px rgba(20,40,90,.14)", background: "#fff", animation: "rise .55s .05s both" }}>
           {/* order summary */}
           <div
             className="mn-checkout-summary"
             style={{
               background: "linear-gradient(160deg,#eef4ff,#f9fbff)",
               borderRight: "1px solid var(--line-2)",
-              padding: "56px 60px",
+              padding: "48px 44px",
               position: "relative",
               overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
             }}
           >
             <div style={{ position: "absolute", right: -60, top: -60, width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(circle,rgba(77,140,255,.16),transparent 70%)" }} />
@@ -56,7 +60,6 @@ export default async function CheckoutPage({
                 background: "#fff",
                 boxShadow: "0 12px 32px rgba(20,40,90,.08)",
                 padding: "24px 26px",
-                maxWidth: 420,
                 animation: "drift 5s ease-in-out infinite",
               }}
             >
@@ -85,7 +88,7 @@ export default async function CheckoutPage({
                 ))}
               </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 26, maxWidth: 420, background: "#fff", border: "1px solid var(--line)", borderRadius: 10, padding: "13px 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 20, background: "#fff", border: "1px solid var(--line)", borderRadius: 10, padding: "13px 16px" }}>
               <Icon.shieldCheck size={15} />
               <span className="font-mono" style={{ fontSize: 11, letterSpacing: ".06em", color: "var(--muted)" }}>
                 MANDATE RE-CHECKED BEFORE CHARGE
@@ -100,7 +103,7 @@ export default async function CheckoutPage({
           </div>
 
           {/* payment — the real Hyperswitch SDK */}
-          <div className="mn-checkout-payment" style={{ padding: "56px 52px" }}>
+          <div className="mn-checkout-payment" style={{ padding: "48px 44px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <div style={{ fontFamily: disp, fontWeight: 800, fontSize: 26, letterSpacing: "-.01em" }}>Pay with card</div>
             <p className="font-mono" style={{ margin: "8px 0 20px", fontSize: 10.5, letterSpacing: ".06em", color: "var(--faint)" }}>
               TEST CARD 4242 4242 4242 4242 · ANY FUTURE EXPIRY · ANY CVC
@@ -110,6 +113,7 @@ export default async function CheckoutPage({
               PCI DSS · TOKENIZED · JUSPAY HYPERSWITCH
             </div>
           </div>
+        </div>
         </div>
       </div>
     </main>

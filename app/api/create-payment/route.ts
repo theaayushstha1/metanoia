@@ -4,6 +4,7 @@ import { initiateSubscription, hyperswitchClient } from "@/lib/checkout";
 import { getPlan } from "@/lib/catalog";
 import { addEvent } from "@/lib/memory/store";
 import { DEMO_CUSTOMER } from "@/lib/constants";
+import { getSessionIntentMandate } from "@/lib/mandate-session";
 
 export const runtime = "nodejs";
 
@@ -25,8 +26,14 @@ export async function POST(req: NextRequest) {
 
   try {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const intent = await getSessionIntentMandate();
     const result = await initiateSubscription(
-      { planId: parsed.data.planId, customerId: DEMO_CUSTOMER, returnUrl: `${appUrl}/checkout/complete` },
+      {
+        planId: parsed.data.planId,
+        customerId: DEMO_CUSTOMER,
+        returnUrl: `${appUrl}/checkout/complete`,
+        intent,
+      },
       hyperswitchClient
     );
 

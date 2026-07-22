@@ -86,15 +86,13 @@ export default function MemoryPanel() {
   const on = snap.consent;
 
   return (
-    <div className="mn-page-pad" style={{ padding: "6px 64px 0" }}>
+    <section className="mn-memory-panel" aria-label="Preference memory">
       <div
         style={{
-          maxWidth: 900,
-          margin: "0 auto",
           border: `1px solid ${on ? "var(--accent-line)" : "var(--line)"}`,
-          borderRadius: 14,
+          borderRadius: 10,
           background: on ? "linear-gradient(180deg,#f6f9ff,#fff)" : "var(--panel)",
-          padding: "18px 22px",
+          padding: "16px 18px",
         }}
       >
         {/* header + toggle */}
@@ -102,13 +100,13 @@ export default function MemoryPanel() {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Icon.sparkle size={15} />
             <div>
-              <div className="font-mono" style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".14em" }}>
+              <div className="font-mono" style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: ".12em" }}>
                 PREFERENCE MEMORY
               </div>
-              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>
                 {on
-                  ? "Metanoia personalizes each run from what you pick and pass on."
-                  : "Off. Turn on to let Metanoia learn your taste over time."}
+                  ? "Uses choices and passes to personalize future runs."
+                  : "Off · opt in to learn your preferences."}
               </div>
             </div>
           </div>
@@ -168,7 +166,7 @@ export default function MemoryPanel() {
           </>
         )}
       </div>
-    </div>
+    </section>
   );
 }
 

@@ -7,6 +7,7 @@
  * Everything that touches ledger state is async (a real database round-trip).
  */
 import type { IntentMandate } from "@/lib/ap2/mandate";
+import { DEFAULT_EDITABLE_MANDATE, type EditableMandate } from "@/lib/mandate-policy";
 import { pgConfigured } from "@/lib/db/client";
 import { InMemoryStore } from "@/lib/store-memory";
 import { PgStore } from "@/lib/store-pg";
@@ -28,7 +29,7 @@ export function isDurable(): boolean {
 }
 
 /** The default mandate a user grants the agent. Expiry is always 30 days out. */
-export function getIntentMandate(): IntentMandate {
+export function getIntentMandate(policy: EditableMandate = DEFAULT_EDITABLE_MANDATE): IntentMandate {
   return {
     user_cart_confirmation_required: true,
     natural_language_description:
@@ -36,10 +37,10 @@ export function getIntentMandate(): IntentMandate {
     requires_refundability: false,
     intent_expiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     policy: {
-      monthly_cap_cents: 6000, // $60/mo total
-      per_charge_cap_cents: 4000, // no single plan over $40/mo
+      monthly_cap_cents: policy.monthly_cap_cents,
+      per_charge_cap_cents: policy.per_charge_cap_cents,
       allowed_categories: undefined,
-      max_active_subscriptions: 3,
+      max_active_subscriptions: policy.max_active_subscriptions,
     },
   };
 }

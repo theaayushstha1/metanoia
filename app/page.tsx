@@ -1,9 +1,10 @@
 import Workbench from "./Workbench";
-import { getIntentMandate, getSubscriptions } from "@/lib/store";
+import { getSubscriptions } from "@/lib/store";
 import { DEMO_CUSTOMER } from "@/lib/constants";
+import { getSessionIntentMandate } from "@/lib/mandate-session";
 
 export default async function Home() {
-  const { policy } = getIntentMandate();
+  const { policy } = await getSessionIntentMandate();
   const subscriptions = await getSubscriptions(DEMO_CUSTOMER);
   const spent = subscriptions.reduce((total, subscription) => total + subscription.amount_cents, 0);
   return (

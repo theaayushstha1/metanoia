@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { renewSubscription, hyperswitchRenewalClient } from "@/lib/checkout";
 import { DEMO_CUSTOMER } from "@/lib/constants";
+import { getSessionIntentMandate } from "@/lib/mandate-session";
 
 export const runtime = "nodejs";
 
@@ -19,8 +20,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const intent = await getSessionIntentMandate();
     const result = await renewSubscription(
-      { planId: parsed.data.planId, customerId: DEMO_CUSTOMER },
+      { planId: parsed.data.planId, customerId: DEMO_CUSTOMER, intent },
       hyperswitchRenewalClient
     );
 

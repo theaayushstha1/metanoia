@@ -6,14 +6,14 @@ import {
   recordAttempt,
   getCredential,
   getSubscriptions,
-  getIntentMandate,
   getSavedPaymentMethod,
 } from "@/lib/store";
 import { CATALOG, getPlan, formatUsd, type Plan } from "@/lib/catalog";
 import { DEMO_CUSTOMER } from "@/lib/constants";
-import { TopBar, Pill, Icon, LiveDot, usd } from "../../components/ui";
+import { TopBar, Pill, LiveDot, usd } from "../../components/ui";
 import CapabilityProbe from "./CapabilityProbe";
 import RenewPanel from "./RenewPanel";
+import { getSessionIntentMandate } from "@/lib/mandate-session";
 
 const blue = "var(--blue)";
 const disp = "var(--font-bricolage), sans-serif";
@@ -88,7 +88,7 @@ export default async function CompletePage({
   const credential = plan ? await getCredential(DEMO_CUSTOMER, plan.id) : undefined;
   const savedPm = plan ? await getSavedPaymentMethod(DEMO_CUSTOMER, plan.id) : undefined;
   const committed = (await getSubscriptions(DEMO_CUSTOMER)).reduce((s, x) => s + x.amount_cents, 0);
-  const remaining = getIntentMandate().policy.monthly_cap_cents - committed;
+  const remaining = (await getSessionIntentMandate()).policy.monthly_cap_cents - committed;
   const now = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
 
   return (
@@ -127,18 +127,35 @@ export default async function CompletePage({
             </Link>
           </div>
         ) : (
-          <div className="mn-receipt-grid" style={{ display: "grid", gridTemplateColumns: "520px 1fr", gap: 56, padding: "56px 64px", alignItems: "start", position: "relative", overflow: "hidden" }}>
+          <div className="mn-receipt-grid" style={{ display: "grid", gridTemplateColumns: "520px 1fr", gap: 56, padding: "48px 64px", minHeight: "calc(100vh - 58px)", alignContent: "center", alignItems: "center", position: "relative", overflow: "hidden" }}>
             <div style={{ position: "absolute", inset: 0, background: "radial-gradient(600px 280px at 30% -60px,rgba(77,140,255,.10),transparent)" }} />
 
             {/* receipt ticket */}
             <div style={{ position: "relative", border: "1px solid var(--line)", borderRadius: 16, background: "#fff", boxShadow: "0 18px 44px rgba(20,40,90,.12)", overflow: "hidden", animation: "rise .6s .1s both" }}>
-              <div style={{ background: "linear-gradient(135deg,#4d8cff,#1e54d0)", padding: "30px 30px 26px", textAlign: "center" }}>
-                <span style={{ display: "inline-grid", placeItems: "center", width: 58, height: 58, background: "#fff", borderRadius: "50%", animation: "pop .6s .3s both" }}>
-                  <Icon.check size={28} color={blue} sw={2.6} />
+              <div style={{ background: "linear-gradient(135deg,#4d8cff,#1e54d0)", padding: "32px 30px 28px", textAlign: "center", position: "relative", overflow: "hidden" }}>
+                <span style={{ position: "relative", display: "inline-grid", placeItems: "center", width: 60, height: 60 }}>
+                  <span style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "2px solid rgba(255,255,255,.45)", animation: "mnripple 1.8s ease-out .5s 2" }} />
+                  <span style={{ display: "grid", placeItems: "center", width: 58, height: 58, background: "#fff", borderRadius: "50%", boxShadow: "0 6px 18px rgba(12,30,80,.22)", animation: "pop .6s .3s both" }}>
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M20 6 9 17l-5-5" stroke="#2b6bf3" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="26" strokeDashoffset="26" style={{ animation: "mntick .5s .55s forwards" }} />
+                    </svg>
+                  </span>
                 </span>
-                <div style={{ marginTop: 14, fontFamily: disp, fontWeight: 800, fontSize: 24, color: "#fff" }}>Payment settled</div>
-                <div className="font-mono" style={{ fontSize: 11, fontWeight: 500, letterSpacing: ".1em", color: "rgba(255,255,255,.75)", marginTop: 5 }}>
+                <div style={{ marginTop: 14, fontFamily: disp, fontWeight: 800, fontSize: 24, color: "#fff", animation: "rise .5s .35s both" }}>Payment settled</div>
+                <div className="font-mono" style={{ fontSize: 11, fontWeight: 500, letterSpacing: ".1em", color: "rgba(255,255,255,.75)", marginTop: 5, animation: "rise .5s .42s both" }}>
                   JUSPAY HYPERSWITCH · SANDBOX
+                </div>
+                <div style={{ marginTop: 18, display: "inline-grid", gap: 9, textAlign: "left" }}>
+                  {["Mandate re-checked", "Credential issued", "Capability online"].map((label, i) => (
+                    <div key={label} style={{ display: "flex", alignItems: "center", gap: 10, animation: `rise .45s ${0.6 + i * 0.28}s both` }}>
+                      <span style={{ width: 18, height: 18, borderRadius: "50%", background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.55)", display: "grid", placeItems: "center", flex: "none" }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path d="M20 6 9 17l-5-5" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="26" strokeDashoffset="26" style={{ animation: `mntick .4s ${0.75 + i * 0.28}s forwards` }} />
+                        </svg>
+                      </span>
+                      <span className="font-mono" style={{ fontSize: 11, letterSpacing: ".04em", color: "rgba(255,255,255,.94)" }}>{label}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
               <div className="font-mono" style={{ padding: "26px 30px 8px", display: "grid", gap: 13 }}>

@@ -23,7 +23,7 @@ import {
   stablePaymentId,
   type PaymentResponse,
 } from "@/lib/hyperswitch";
-import type { CartItem } from "@/lib/ap2/mandate";
+import type { CartItem, IntentMandate } from "@/lib/ap2/mandate";
 
 export interface PaymentClient {
   createPaymentIntent(p: {
@@ -57,7 +57,7 @@ export type InitiateResult =
     };
 
 export async function initiateSubscription(
-  args: { planId: string; customerId: string; returnUrl: string; now?: Date },
+  args: { planId: string; customerId: string; returnUrl: string; now?: Date; intent?: IntentMandate },
   client: PaymentClient
 ): Promise<InitiateResult> {
   const plan = getPlan(args.planId);
@@ -72,7 +72,7 @@ export async function initiateSubscription(
     amount_cents: plan.priceCents,
   };
   const verdict = evaluateAgainstConstitution({
-    intent: getIntentMandate(),
+    intent: args.intent ?? getIntentMandate(),
     item,
     existing: await getSubscriptions(args.customerId),
     now: args.now,
@@ -150,7 +150,8 @@ export const hyperswitchRenewalClient: RenewalClient = { chargeSavedMethod };
 export async function evaluateRenewal(
   planId: string,
   customerId: string,
-  currentAmountCents: number
+  currentAmountCents: number,
+  intent: IntentMandate = getIntentMandate()
 ): Promise<ConstitutionVerdict> {
   const plan = getPlan(planId);
   if (!plan) throw new Error(`Unknown plan: ${planId}`);
@@ -162,7 +163,7 @@ export async function evaluateRenewal(
     amount_cents: currentAmountCents,
   };
   const existingOthers = (await getSubscriptions(customerId)).filter((s) => s.plan_id !== planId);
-  return evaluateAgainstConstitution({ intent: getIntentMandate(), item, existing: existingOthers });
+  return evaluateAgainstConstitution({ intent, item, existing: existingOthers });
 }
 
 export type RenewalResult =
@@ -171,7 +172,7 @@ export type RenewalResult =
   | { ok: true; verdict: ConstitutionVerdict; paymentId: string; status: string };
 
 export async function renewSubscription(
-  args: { planId: string; customerId: string; now?: Date },
+  args: { planId: string; customerId: string; now?: Date; intent?: IntentMandate },
   client: RenewalClient
 ): Promise<RenewalResult> {
   const plan = getPlan(args.planId);
@@ -186,7 +187,12 @@ export async function renewSubscription(
   const amount = plan.priceCents;
 
   // 1) Re-run the mandate BEFORE charging. Every autonomous renewal is gated.
-  const verdict = await evaluateRenewal(args.planId, args.customerId, amount);
+  const verdict = await evaluateRenewal(
+    args.planId,
+    args.customerId,
+    amount,
+    args.intent ?? getIntentMandate()
+  );
   if (!verdict.approved) {
     return { ok: false, refused: true, verdict };
   }

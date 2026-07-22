@@ -9,6 +9,7 @@ import { buildPreferenceProfile, preferenceProfilePrompt } from "@/lib/memory/pr
 import { addEvent, addFact, addSource } from "@/lib/memory/store";
 import type { RankedPlan } from "@/lib/agent/ranking";
 import { runScoutPanel } from "@/lib/agent/scouts";
+import { getSessionIntentMandate } from "@/lib/mandate-session";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -67,8 +68,12 @@ export async function POST(req: NextRequest) {
     const agentRequest =
       `${parsed.data.request}\n\n${contextPrompt(context)}` + (profileBlock ? `\n\n${profileBlock}` : "");
     const existing = await getSubscriptions(DEMO_CUSTOMER);
-    const result = await runProcurement(agentRequest, DEMO_CUSTOMER, { defaultPriority: profile.priorityLean });
-    const rankings = result.proposal ? rankProposal(result.proposal, existing).slice(0, 3) : [];
+    const intent = await getSessionIntentMandate();
+    const result = await runProcurement(agentRequest, DEMO_CUSTOMER, {
+      defaultPriority: profile.priorityLean,
+      intent,
+    });
+    const rankings = result.proposal ? rankProposal(result.proposal, existing, intent).slice(0, 3) : [];
     const candidates = rankings.map(candidateView);
     const scouts = result.proposal
       ? await runScoutPanel({

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { initiateSubscription, confirmPaid, type PaymentClient } from "@/lib/checkout";
-import { getSubscriptions, __resetStore } from "@/lib/store";
+import { getIntentMandate, getSubscriptions, __resetStore } from "@/lib/store";
 import type { PaymentResponse } from "@/lib/hyperswitch";
 
 const CUSTOMER = "cust_test";
@@ -39,6 +39,21 @@ describe("checkout enforcement", () => {
     expect(res.refused).toBe(true);
     expect(calls.length).toBe(0);
     expect(client.createPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it("uses a user-raised mandate at the checkout enforcement gate", async () => {
+    const { client, calls } = fakeClient();
+    const intent = getIntentMandate({
+      monthly_cap_cents: 10000,
+      per_charge_cap_cents: 7000,
+      max_active_subscriptions: 5,
+    });
+    const res = await initiateSubscription(
+      { planId: "compute_cluster", customerId: CUSTOMER, returnUrl: RETURN_URL, intent },
+      client
+    );
+    expect(res.refused).toBe(false);
+    expect(calls).toHaveLength(1);
   });
 
   it("lets a completed purchase change the NEXT spend-gate evaluation", async () => {

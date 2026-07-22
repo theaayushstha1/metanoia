@@ -18,7 +18,7 @@ import {
   type ConstitutionVerdict,
   type ExistingSubscription,
 } from "@/lib/agent/spendCap";
-import type { CartItem } from "@/lib/ap2/mandate";
+import type { CartItem, IntentMandate } from "@/lib/ap2/mandate";
 import { rankPlans, type RankedPlan, type RankingPriority } from "@/lib/agent/ranking";
 
 const CapabilitySchema = z.enum([
@@ -117,7 +117,7 @@ Procedure:
 export async function runProcurement(
   request: string,
   customerId = "metanoia_demo_customer",
-  opts?: { defaultPriority?: RankingPriority }
+  opts?: { defaultPriority?: RankingPriority; intent?: IntentMandate }
 ): Promise<ProcurementResult> {
   let proposal: Proposal | null = null;
   const trace: TraceStep[] = [];
@@ -125,6 +125,7 @@ export async function runProcurement(
   // Read the customer's live subscriptions once, then thread this snapshot through
   // the (synchronous) mandate + ranking logic.
   const existing = await getSubscriptions(customerId);
+  const intent = opts?.intent ?? getIntentMandate();
 
   const tools = {
     list_services: tool({
@@ -147,7 +148,7 @@ export async function runProcurement(
       execute: async ({ planId }) => {
         const plan = getPlan(planId);
         if (!plan) return { approved: false, summary: `Unknown plan ${planId}` };
-        const v = evaluateForPlan(plan, existing);
+        const v = evaluateForPlan(plan, existing, intent);
         return { approved: v.approved, summary: v.summary };
       },
     }),
@@ -184,10 +185,14 @@ export async function runProcurement(
     finalProposal.normalized_requirements.priority = opts.defaultPriority;
   }
 
-  return { proposal: finalProposal, decision: decide(finalProposal, existing), trace };
+  return { proposal: finalProposal, decision: decide(finalProposal, existing, intent), trace };
 }
 
-function evaluateForPlan(plan: Plan, existing: ExistingSubscription[]): ConstitutionVerdict {
+function evaluateForPlan(
+  plan: Plan,
+  existing: ExistingSubscription[],
+  intent: IntentMandate
+): ConstitutionVerdict {
   const item: CartItem = {
     plan_id: plan.id,
     label: plan.name,
@@ -195,11 +200,15 @@ function evaluateForPlan(plan: Plan, existing: ExistingSubscription[]): Constitu
     category: plan.category,
     amount_cents: plan.priceCents,
   };
-  return evaluateAgainstConstitution({ intent: getIntentMandate(), item, existing });
+  return evaluateAgainstConstitution({ intent, item, existing });
 }
 
 /** Server-authoritative decision — never trusts the model for amount/verdict. */
-export function decide(proposal: Proposal | null, existing: ExistingSubscription[]): Decision {
+export function decide(
+  proposal: Proposal | null,
+  existing: ExistingSubscription[],
+  intent: IntentMandate = getIntentMandate()
+): Decision {
   const selected = proposal?.selected_plan_id ?? null;
   if (!selected) {
     return { selected_plan_id: null, valid: true, confirmation_required: false, note: "No plan selected." };
@@ -224,7 +233,7 @@ export function decide(proposal: Proposal | null, existing: ExistingSubscription
     };
   }
 
-  const ranked = rankProposal(proposal, existing);
+  const ranked = rankProposal(proposal, existing, intent);
   const selectedRank = ranked.find((candidate) => candidate.eligible);
   if (!selectedRank) {
     const closest = ranked[0];
@@ -251,7 +260,7 @@ export function decide(proposal: Proposal | null, existing: ExistingSubscription
     plan: { id: plan.id, name: plan.name, vendor: plan.vendor, price_cents: plan.priceCents },
     verdict,
     projected_monthly_cents: projected,
-    remaining_monthly_cents: getIntentMandate().policy.monthly_cap_cents - projected,
+    remaining_monthly_cents: intent.policy.monthly_cap_cents - projected,
     confirmation_required: verdict.approved, // require explicit human confirm before any charge
     score: selectedRank.score,
     ranked_plan_ids: ranked.map((candidate) => candidate.plan.id),
@@ -259,10 +268,15 @@ export function decide(proposal: Proposal | null, existing: ExistingSubscription
   };
 }
 
-export function rankProposal(proposal: Proposal, existing: ExistingSubscription[]): RankedPlan[] {
+export function rankProposal(
+  proposal: Proposal,
+  existing: ExistingSubscription[],
+  intent: IntentMandate = getIntentMandate()
+): RankedPlan[] {
   return rankPlans(
     proposal.requested_capability as Capability,
     proposal.normalized_requirements,
-    existing
+    existing,
+    intent
   );
 }

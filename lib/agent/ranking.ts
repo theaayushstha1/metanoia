@@ -5,6 +5,7 @@ import {
   type ConstitutionVerdict,
   type ExistingSubscription,
 } from "@/lib/agent/spendCap";
+import type { IntentMandate } from "@/lib/ap2/mandate";
 
 export type RankingPriority = "cost" | "balanced" | "reliability" | "throughput";
 
@@ -52,9 +53,9 @@ function requiredFeatures(r: NormalizedRequirements): string[] {
   );
 }
 
-function mandateFor(plan: Plan, existing: ExistingSubscription[]): ConstitutionVerdict {
+function mandateFor(plan: Plan, existing: ExistingSubscription[], intent: IntentMandate): ConstitutionVerdict {
   return evaluateAgainstConstitution({
-    intent: getIntentMandate(),
+    intent,
     item: {
       plan_id: plan.id,
       label: plan.name,
@@ -75,12 +76,13 @@ function mandateFor(plan: Plan, existing: ExistingSubscription[]): ConstitutionV
 export function rankPlans(
   capability: Capability,
   requirements: NormalizedRequirements,
-  existing: ExistingSubscription[]
+  existing: ExistingSubscription[],
+  intent: IntentMandate = getIntentMandate()
 ): RankedPlan[] {
   const required = requiredFeatures(requirements);
   const priority = requirements.priority ?? "balanced";
   const [fitWeight, priceWeight, reliabilityWeight, throughputWeight] = WEIGHTS[priority];
-  const mandate = getIntentMandate();
+  const mandate = intent;
   const priceCeiling = Math.max(
     1,
     Math.min(
@@ -104,7 +106,7 @@ export function rankPlans(
         if (!plan.features.includes(feature)) hardFailures.push(`missing ${feature.replace(/_/g, " ")}`);
       }
 
-      const verdict = mandateFor(plan, existing);
+      const verdict = mandateFor(plan, existing, intent);
       const featureCoverage = required.length
         ? required.filter((feature) => plan.features.includes(feature)).length / required.length
         : clamp(plan.features.length / 4);
