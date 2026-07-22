@@ -135,11 +135,17 @@ export async function createPaymentIntent(params: {
   try {
     return await hsFetch<PaymentResponse>("/payments", body);
   } catch (e) {
-    // Idempotent recovery: if this payment_id already exists (HE_01), the create is
-    // a retry — return the existing intent instead of erroring or double-charging.
+    // The payment_id already exists (HE_01). Two cases:
+    //  - reusable intent (still awaiting a method/confirmation) -> return it (idempotent, no double-charge)
+    //  - terminal-failed/cancelled/expired -> that attempt is dead; mint a fresh
+    //    id so the user can retry (a failed intent can't be re-confirmed).
     const msg = e instanceof Error ? e.message : String(e);
     if (params.paymentId && (msg.includes("HE_01") || msg.includes("already exists"))) {
-      return getPayment(params.paymentId);
+      const existing = await getPayment(params.paymentId);
+      const dead = ["failed", "cancelled", "expired"].includes(existing.status);
+      if (!dead) return existing;
+      body.payment_id = "pay_" + crypto.randomBytes(13).toString("hex"); // 30 chars
+      return await hsFetch<PaymentResponse>("/payments", body);
     }
     throw e;
   }

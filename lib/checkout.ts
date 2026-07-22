@@ -80,14 +80,9 @@ export async function initiateSubscription(
   }
 
   // 2) Approved -> stable id per (customer, plan, period) makes retries idempotent.
+  // The client self-heals a dead intent to a fresh id, so we record the attempt
+  // under the id Hyperswitch actually used (create first, then record).
   const paymentId = stablePaymentId(`${args.customerId}:${plan.id}:${billingPeriod(args.now)}`);
-  recordAttempt({
-    paymentId,
-    customerId: args.customerId,
-    planId: plan.id,
-    amountCents: plan.priceCents,
-  });
-
   const payment = await client.createPaymentIntent({
     amount: plan.priceCents,
     currency: "USD",
@@ -97,12 +92,19 @@ export async function initiateSubscription(
     returnUrl: args.returnUrl,
     paymentId,
   });
+  const actualId = payment.payment_id || paymentId;
+  recordAttempt({
+    paymentId: actualId,
+    customerId: args.customerId,
+    planId: plan.id,
+    amountCents: plan.priceCents,
+  });
 
   return {
     refused: false,
     verdict,
     clientSecret: payment.client_secret,
-    paymentId: payment.payment_id || paymentId,
+    paymentId: actualId,
     status: payment.status,
   };
 }
