@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 :root {
-  --font-bricolage: "Avenir Next", "Helvetica Neue", sans-serif;
-  --font-archivo: "Avenir Next", "Helvetica Neue", sans-serif;
-  --font-jbmono: "SFMono-Regular", "Cascadia Code", "Liberation Mono", monospace;
+  --font-bricolage: "Bricolage Grotesque", "Avenir Next", "Helvetica Neue", sans-serif;
+  --font-archivo: "Archivo", "Avenir Next", "Helvetica Neue", sans-serif;
+  --font-jbmono: "JetBrains Mono", "SFMono-Regular", "Cascadia Code", monospace;
   --blue: #2b6bf3;
   --blue-d: #1e54d0;
   --blue-l: #4d8cff;
