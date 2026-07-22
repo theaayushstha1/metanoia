@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { loadHyper } from "@juspay-tech/hyper-js";
 import { HyperElements } from "@juspay-tech/react-hyper-js";
 import CheckoutForm from "./CheckoutForm";
@@ -23,6 +24,7 @@ export default function CheckoutClient({
   planId: string;
   amountLabel?: string;
 }) {
+  const router = useRouter();
   const [options, setOptions] = useState<Record<string, unknown>>({});
   const [paymentId, setPaymentId] = useState<string>();
   const [error, setError] = useState<string>(
@@ -42,7 +44,10 @@ export default function CheckoutClient({
         if (cancelled) return;
         if (data.refused) setError(`Refused by the mandate: ${data.verdict?.summary ?? ""}`);
         else if (data.error) setError(data.error);
-        else {
+        else if (data.status === "succeeded") {
+          // Already paid this period -> go straight to the receipt.
+          router.push(`/checkout/complete?payment_id=${encodeURIComponent(data.paymentId ?? "")}`);
+        } else {
           setPaymentId(data.paymentId);
           setOptions({
             clientSecret: data.clientSecret,
