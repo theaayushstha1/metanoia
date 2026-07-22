@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Icon, Pill, LiveDot, TopBar, usd } from "./components/ui";
 
@@ -80,7 +80,7 @@ export default function Workbench({ mandate }: { mandate: Mandate }) {
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
 
-  async function run() {
+  async function runWith(text: string) {
     setLoading(true);
     setError("");
     setResult(null);
@@ -88,7 +88,7 @@ export default function Workbench({ mandate }: { mandate: Mandate }) {
       const r = await fetch("/api/agent/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ request }),
+        body: JSON.stringify({ request: text }),
       });
       const data = await r.json();
       if (!r.ok) setError(data.error ?? "Agent error");
@@ -99,6 +99,12 @@ export default function Workbench({ mandate }: { mandate: Mandate }) {
       setLoading(false);
     }
   }
+  const run = () => runWith(request);
+  const refine = (feedback: string) =>
+    runWith(
+      `${request}\n\nThe user reviewed your previous pick and asked for: ${feedback}. ` +
+        `Reconsider every provider and choose again, respecting the same spending mandate.`
+    );
 
   const statusPills = (
     <>
@@ -121,12 +127,16 @@ export default function Workbench({ mandate }: { mandate: Mandate }) {
 
   return (
     <div style={{ minHeight: "100vh", background: "#fff" }}>
-      {refused && (
+      {!loading && refused && (
         <div style={{ height: 4, background: "linear-gradient(90deg,var(--blue),var(--red-2))" }} />
       )}
-      <TopBar tag={result ? "RUN R-0114" : "PROCUREMENT TERMINAL"} right={statusPills} />
+      <TopBar
+        tag={loading ? "PROCURING" : result ? "RUN R-0114" : "PROCUREMENT TERMINAL"}
+        right={statusPills}
+      />
 
-      {!result && (
+      {loading && <Processing />}
+      {!loading && !result && (
         <Home
           mandate={mandate}
           request={request}
@@ -136,10 +146,171 @@ export default function Workbench({ mandate }: { mandate: Mandate }) {
           error={error}
         />
       )}
-      {result && approved && (
-        <AgentResult result={result} mandate={mandate} onConfirm={(id) => router.push(`/checkout?plan=${id}`)} />
+      {!loading && result && approved && (
+        <AgentResult
+          result={result}
+          mandate={mandate}
+          onConfirm={(id) => router.push(`/checkout?plan=${id}`)}
+          onRefine={refine}
+        />
       )}
-      {result && refused && <Refused result={result} onReset={() => setResult(null)} />}
+      {!loading && result && refused && <Refused result={result} onReset={() => setResult(null)} />}
+    </div>
+  );
+}
+
+/* ══ PROCESSING ════════════════════════════════════════════════════════ */
+function Processing() {
+  const steps = [
+    { t: "Reading your request", d: "extracting hard requirements" },
+    { t: "Scanning the marketplace", d: "7 onboarded vendors" },
+    { t: "Comparing offers", d: "price · throughput · reliability" },
+    { t: "Checking your mandate", d: "SpendGuard, in order" },
+    { t: "Finalizing the pick", d: "assembling the proposal" },
+  ];
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setStep((s) => (s < steps.length - 1 ? s + 1 : s)), 1250);
+    return () => clearInterval(id);
+  }, [steps.length]);
+
+  return (
+    <div style={{ padding: "72px 24px 96px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+      {/* emblem */}
+      <div style={{ position: "relative", width: 150, height: 150, display: "grid", placeItems: "center" }}>
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            style={{ position: "absolute", width: 80, height: 80, borderRadius: "50%", border: "1.5px solid var(--accent-line)", animation: `ring 2.4s ease-out ${i * 0.8}s infinite` }}
+          />
+        ))}
+        <svg width="112" height="112" viewBox="0 0 112 112" style={{ position: "absolute", animation: "spin 3.6s linear infinite" }}>
+          <circle cx="56" cy="56" r="52" fill="none" stroke="var(--blue)" strokeWidth="2" strokeDasharray="10 14" strokeLinecap="round" opacity="0.5" />
+        </svg>
+        <svg width="86" height="86" viewBox="0 0 86 86" style={{ position: "absolute", animation: "spin 1.4s linear infinite" }}>
+          <circle cx="43" cy="43" r="39" fill="none" stroke="var(--blue)" strokeWidth="3" strokeDasharray="60 200" strokeLinecap="round" />
+        </svg>
+        <span
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 16,
+            background: "linear-gradient(135deg,#4d8cff,#1e54d0)",
+            display: "grid",
+            placeItems: "center",
+            boxShadow: "0 10px 30px rgba(43,107,243,.4)",
+            animation: "bob 2s ease-in-out infinite",
+          }}
+        >
+          <Icon.sparkle size={26} color="#fff" />
+        </span>
+      </div>
+
+      <div className="font-mono" style={{ marginTop: 24, fontSize: 11, fontWeight: 500, letterSpacing: ".2em", color: blue }}>
+        METANOIA IS PROCURING
+      </div>
+      <div style={{ marginTop: 8, fontFamily: disp, fontWeight: 800, fontSize: 30, letterSpacing: "-.02em" }}>
+        Finding your best option…
+      </div>
+
+      <div style={{ marginTop: 32, width: "100%", maxWidth: 440, display: "grid", gap: 2 }}>
+        {steps.map((s, i) => {
+          const state = i < step ? "done" : i === step ? "active" : "todo";
+          return (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                padding: "12px 16px",
+                borderRadius: 10,
+                background: state === "active" ? "var(--accent-bg)" : "transparent",
+                opacity: state === "todo" ? 0.4 : 1,
+                transition: "all .3s",
+              }}
+            >
+              <span style={{ width: 22, height: 22, display: "grid", placeItems: "center", flex: "none" }}>
+                {state === "done" ? (
+                  <span style={{ width: 20, height: 20, borderRadius: "50%", background: "var(--green-bg)", display: "grid", placeItems: "center" }}>
+                    <Icon.check size={11} color="var(--green)" sw={3} />
+                  </span>
+                ) : state === "active" ? (
+                  <svg width="20" height="20" viewBox="0 0 20 20" style={{ animation: "spin .8s linear infinite" }}>
+                    <circle cx="10" cy="10" r="8" fill="none" stroke="var(--accent-line)" strokeWidth="2.5" />
+                    <path d="M10 2a8 8 0 0 1 8 8" fill="none" stroke="var(--blue)" strokeWidth="2.5" strokeLinecap="round" />
+                  </svg>
+                ) : (
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--faint)" }} />
+                )}
+              </span>
+              <span style={{ flex: 1 }}>
+                <span className="font-body" style={{ display: "block", fontSize: 13.5, fontWeight: state === "active" ? 700 : 600, color: state === "active" ? blue : "var(--ink)" }}>
+                  {s.t}
+                </span>
+                <span className="font-mono" style={{ fontSize: 10.5, color: "var(--muted)" }}>
+                  {s.d}
+                </span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ marginTop: 26, width: "100%", maxWidth: 440, height: 4, borderRadius: 3, overflow: "hidden", background: "var(--line-2)" }}>
+        <div style={{ height: "100%", width: "100%", background: "linear-gradient(90deg,transparent,var(--blue),transparent)", backgroundSize: "220% 100%", animation: "shimmer 1.4s linear infinite" }} />
+      </div>
+      <div className="font-mono" style={{ marginTop: 14, fontSize: 10, letterSpacing: ".1em", color: "var(--faint)" }}>
+        GEMINI 3.1 PRO · REASONING LIVE
+      </div>
+    </div>
+  );
+}
+
+/* ══ COUNTER / REFINE ══════════════════════════════════════════════════ */
+function CounterBar({ onRefine }: { onRefine: (f: string) => void }) {
+  const [text, setText] = useState("");
+  const chips = ["Find something cheaper", "I need higher throughput", "Prioritize uptime", "Try a different vendor"];
+  const submit = (f: string) => {
+    if (f.trim()) onRefine(f.trim());
+  };
+  return (
+    <div style={{ marginTop: 16, border: "1px dashed var(--line)", borderRadius: 12, background: "var(--panel)", padding: "18px 22px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
+        <Icon.sparkle size={14} />
+        <span className="font-mono" style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: ".14em" }}>
+          NOT QUITE? TELL THE AGENT
+        </span>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+        {chips.map((c) => (
+          <button
+            key={c}
+            onClick={() => submit(c)}
+            className="font-body"
+            style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-2)", background: "#fff", border: "1px solid var(--line-3)", borderRadius: 99, padding: "8px 14px", cursor: "pointer" }}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submit(text)}
+          placeholder="…or say what you'd change"
+          className="font-body"
+          style={{ flex: 1, border: "1px solid var(--line-3)", borderRadius: 10, padding: "11px 14px", fontSize: 13, outline: "none" }}
+        />
+        <button
+          onClick={() => submit(text)}
+          className="font-body"
+          style={{ fontSize: 12.5, fontWeight: 600, color: blue, background: "var(--accent-bg)", border: "1px solid var(--accent-line)", borderRadius: 10, padding: "11px 20px", cursor: "pointer" }}
+        >
+          Ask again
+        </button>
+      </div>
     </div>
   );
 }
@@ -471,10 +642,12 @@ function AgentResult({
   result,
   mandate,
   onConfirm,
+  onRefine,
 }: {
   result: Result;
   mandate: Mandate;
   onConfirm: (id: string) => void;
+  onRefine: (f: string) => void;
 }) {
   const d = result.decision;
   const checks = d.verdict?.checks ?? [];
@@ -634,6 +807,7 @@ function AgentResult({
             </div>
           </div>
         </div>
+        <CounterBar onRefine={onRefine} />
       </div>
     </div>
   );
