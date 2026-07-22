@@ -166,6 +166,8 @@ export async function chargeSavedMethod(params: {
   paymentId?: string;
   description?: string;
 }): Promise<PaymentResponse> {
+  const mca = process.env.HYPERSWITCH_MANDATE_CONNECTOR_MCA;
+  const conn = process.env.HYPERSWITCH_MANDATE_CONNECTOR ?? "stripe";
   const body: Record<string, unknown> = {
     amount: params.amount,
     currency: params.currency ?? "USD",
@@ -176,6 +178,8 @@ export async function chargeSavedMethod(params: {
       type: "payment_method_id",
       data: params.paymentMethodId,
     },
+    // Route the renewal to the mandate-capable connector that holds the saved method.
+    ...(mca ? { routing: { type: "single", data: { connector: conn, merchant_connector_id: mca } } } : {}),
     ...(params.paymentId ? { payment_id: params.paymentId } : {}),
     ...(params.description ? { description: params.description } : {}),
     ...(PROFILE_ID ? { profile_id: PROFILE_ID } : {}),

@@ -1,11 +1,18 @@
 import Link from "next/link";
 import { getPayment } from "@/lib/hyperswitch";
 import { confirmPaid } from "@/lib/checkout";
-import { getAttempt, getCredential, getSubscriptions, getIntentMandate } from "@/lib/store";
+import {
+  getAttempt,
+  getCredential,
+  getSubscriptions,
+  getIntentMandate,
+  getSavedPaymentMethod,
+} from "@/lib/store";
 import { getPlan, formatUsd } from "@/lib/catalog";
 import { DEMO_CUSTOMER } from "@/lib/constants";
 import { TopBar, Pill, Icon, LiveDot, usd } from "../../components/ui";
 import CapabilityProbe from "./CapabilityProbe";
+import RenewPanel from "./RenewPanel";
 
 const blue = "var(--blue)";
 const disp = "var(--font-bricolage), sans-serif";
@@ -46,6 +53,7 @@ export default async function CompletePage({
   const attempt = payment_id ? getAttempt(payment_id) : undefined;
   const plan = attempt ? getPlan(attempt.planId) : undefined;
   const credential = plan ? getCredential(DEMO_CUSTOMER, plan.id) : undefined;
+  const savedPm = plan ? getSavedPaymentMethod(DEMO_CUSTOMER, plan.id) : undefined;
   const committed = getSubscriptions(DEMO_CUSTOMER).reduce((s, x) => s + x.amount_cents, 0);
   const remaining = getIntentMandate().policy.monthly_cap_cents - committed;
   const now = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
@@ -131,6 +139,7 @@ export default async function CompletePage({
                 Your agent can now {PHRASE[plan?.capability ?? ""] ?? "use the API"}.
               </div>
               {plan && <CapabilityProbe resource={plan.resource} credential={credential} />}
+              {plan && <RenewPanel planId={plan.id} canRenew={Boolean(savedPm)} />}
               <div style={{ display: "flex", gap: 12, marginTop: 24, animation: "rise .6s .55s both" }}>
                 <Link href="/" className="font-body" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: "#fff", background: "linear-gradient(180deg,#3d7bff,#2b6bf3)", borderRadius: 10, padding: "12px 22px", boxShadow: "0 8px 22px rgba(43,107,243,.35)" }}>
                   Back to workbench
