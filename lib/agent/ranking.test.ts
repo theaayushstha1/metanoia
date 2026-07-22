@@ -1,9 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { rankPlans } from "@/lib/agent/ranking";
 import { __resetStore } from "@/lib/store";
-import { DEMO_CUSTOMER } from "@/lib/constants";
+import type { ExistingSubscription } from "@/lib/agent/spendCap";
 
-beforeEach(() => __resetStore());
+// No existing subscriptions in these unit tests -> inject an empty snapshot.
+const NONE: ExistingSubscription[] = [];
+
+beforeEach(async () => {
+  await __resetStore();
+});
 
 describe("deterministic procurement ranking", () => {
   it("returns three market-data choices and selects the compliant balanced option", () => {
@@ -16,7 +21,7 @@ describe("deterministic procurement ranking", () => {
         needs_websockets: true,
         priority: "balanced",
       },
-      DEMO_CUSTOMER
+      NONE
     );
 
     expect(ranked).toHaveLength(3);
@@ -32,7 +37,7 @@ describe("deterministic procurement ranking", () => {
     const ranked = rankPlans(
       "compute",
       { required_features: ["gpu_a100"], priority: "throughput" },
-      DEMO_CUSTOMER
+      NONE
     );
     expect(ranked.some((r) => r.eligible)).toBe(false);
     expect(ranked.find((r) => r.plan.id === "compute_cluster")?.verdict.approved).toBe(false);
@@ -40,7 +45,7 @@ describe("deterministic procurement ranking", () => {
 
   it("offers at least three alternatives in every supported niche", () => {
     for (const capability of ["market-data", "news", "vector-search", "geocoding", "compute"] as const) {
-      expect(rankPlans(capability, {}, DEMO_CUSTOMER)).toHaveLength(3);
+      expect(rankPlans(capability, {}, NONE)).toHaveLength(3);
     }
   });
 });

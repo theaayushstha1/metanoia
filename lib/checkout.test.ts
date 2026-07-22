@@ -24,7 +24,9 @@ function fakeClient() {
   return { client, calls };
 }
 
-beforeEach(() => __resetStore());
+beforeEach(async () => {
+  await __resetStore();
+});
 
 describe("checkout enforcement", () => {
   it("refuses an over-cap plan WITHOUT ever calling Hyperswitch", async () => {
@@ -51,8 +53,8 @@ describe("checkout enforcement", () => {
     expect(calls.length).toBe(1);
 
     // Confirm it succeeded -> now it's a committed subscription.
-    if (!first.refused) confirmPaid(first.paymentId, { paymentMethodId: "pm_1" });
-    expect(getSubscriptions(CUSTOMER)).toHaveLength(1);
+    if (!first.refused) await confirmPaid(first.paymentId, { paymentMethodId: "pm_1" });
+    expect(await getSubscriptions(CUSTOMER)).toHaveLength(1);
 
     // Market Data ($29): 39 + 29 = 68 > $60 monthly cap -> must be refused,
     // and Hyperswitch must NOT be called again.
@@ -84,9 +86,9 @@ describe("checkout enforcement", () => {
     expect(a.paymentId).toBe(b.paymentId);
 
     // Confirming twice records the subscription exactly once.
-    confirmPaid(a.paymentId, { paymentMethodId: "pm_1" });
-    confirmPaid(b.paymentId, { paymentMethodId: "pm_1" });
-    expect(getSubscriptions(CUSTOMER)).toHaveLength(1);
+    await confirmPaid(a.paymentId, { paymentMethodId: "pm_1" });
+    await confirmPaid(b.paymentId, { paymentMethodId: "pm_1" });
+    expect(await getSubscriptions(CUSTOMER)).toHaveLength(1);
   });
 
   it("ignores out-of-order (stale) success events", async () => {
@@ -97,9 +99,9 @@ describe("checkout enforcement", () => {
     );
     if (res.refused) throw new Error("should be approved");
 
-    confirmPaid(res.paymentId, { updatedAt: 2000, paymentMethodId: "pm_1" });
+    await confirmPaid(res.paymentId, { updatedAt: 2000, paymentMethodId: "pm_1" });
     // A stale event (older timestamp) must not undo/alter state.
-    confirmPaid(res.paymentId, { updatedAt: 1000 });
-    expect(getSubscriptions(CUSTOMER)).toHaveLength(1);
+    await confirmPaid(res.paymentId, { updatedAt: 1000 });
+    expect(await getSubscriptions(CUSTOMER)).toHaveLength(1);
   });
 });

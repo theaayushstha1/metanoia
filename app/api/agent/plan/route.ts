@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { rankProposal, runProcurement } from "@/lib/agent/procure";
 import { formatUsd } from "@/lib/catalog";
+import { getSubscriptions } from "@/lib/store";
 import { DEMO_CUSTOMER } from "@/lib/constants";
 import { contextPrompt, enrichProfileContext } from "@/lib/profile/context";
+import { buildPreferenceProfile, preferenceProfilePrompt } from "@/lib/memory/profile";
+import { addEvent, addFact, addSource } from "@/lib/memory/store";
 import type { RankedPlan } from "@/lib/agent/ranking";
+import { runScoutPanel } from "@/lib/agent/scouts";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -58,10 +62,41 @@ export async function POST(req: NextRequest) {
 
   try {
     const context = await enrichProfileContext(parsed.data.context ?? {});
-    const agentRequest = `${parsed.data.request}\n\n${contextPrompt(context)}`;
-    const result = await runProcurement(agentRequest, DEMO_CUSTOMER);
-    const rankings = result.proposal ? rankProposal(result.proposal, DEMO_CUSTOMER).slice(0, 3) : [];
+    const profile = await buildPreferenceProfile(DEMO_CUSTOMER);
+    const profileBlock = preferenceProfilePrompt(profile);
+    const agentRequest =
+      `${parsed.data.request}\n\n${contextPrompt(context)}` + (profileBlock ? `\n\n${profileBlock}` : "");
+    const existing = await getSubscriptions(DEMO_CUSTOMER);
+    const result = await runProcurement(agentRequest, DEMO_CUSTOMER, { defaultPriority: profile.priorityLean });
+    const rankings = result.proposal ? rankProposal(result.proposal, existing).slice(0, 3) : [];
     const candidates = rankings.map(candidateView);
+    const scouts = result.proposal
+      ? await runScoutPanel({
+          request: parsed.data.request,
+          capability: result.proposal.requested_capability,
+          requirements: result.proposal.normalized_requirements,
+          rankings,
+          abortSignal: req.signal,
+        })
+      : [];
+
+    // Learn from this run. Every write is consent-gated inside the store: if the user
+    // hasn't opted in, these are silent no-ops.
+    const ctxIn = parsed.data.context;
+    if (ctxIn?.projectSummary)
+      await addFact(DEMO_CUSTOMER, { kind: "project", value: ctxIn.projectSummary.slice(0, 300), source: "user" });
+    if (ctxIn?.profileSummary)
+      await addFact(DEMO_CUSTOMER, { kind: "experience", value: ctxIn.profileSummary.slice(0, 300), source: "user" });
+    for (const repo of ctxIn?.githubRepos ?? []) await addSource(DEMO_CUSTOMER, { kind: "github", ref: repo });
+    if (result.decision.selected_plan_id) {
+      await addEvent(DEMO_CUSTOMER, {
+        capability: result.proposal?.requested_capability ?? "unknown",
+        planId: result.decision.selected_plan_id,
+        action: "recommended",
+        reason: result.decision.note ?? rankings[0]?.tradeoff,
+        amountCents: result.decision.plan?.price_cents,
+      });
+    }
 
     // If nothing was selected, surface the plan the agent wanted but couldn't afford
     // (the priciest considered) with its authoritative audit, for the "Denied" screen.
@@ -71,7 +106,7 @@ export async function POST(req: NextRequest) {
       blocked = { plan: candidateView(closest), verdict: closest.verdict };
     }
 
-    return NextResponse.json({ ...result, candidates, blocked, context });
+    return NextResponse.json({ ...result, candidates, scouts, blocked, context, profile });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Agent error";
     return NextResponse.json({ error: message }, { status: 500 });

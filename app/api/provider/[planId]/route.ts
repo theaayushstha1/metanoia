@@ -16,7 +16,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ planId: str
   if (!plan) return NextResponse.json({ error: "unknown provider" }, { status: 404 });
 
   const key = req.headers.get("x-api-key") ?? "";
-  const owner = resolveCredential(key);
+  const owner = await resolveCredential(key);
   if (!owner || owner.planId !== planId) {
     return NextResponse.json({ error: "invalid or missing API credential" }, { status: 401 });
   }
@@ -41,6 +41,8 @@ function sample(plan: Plan): unknown {
       return { query: "1600 Amphitheatre Pkwy", lat: 37.4224, lng: -122.0842, as_of: now };
     case "compute":
       return { gpus_available: 8, region: "us-east", as_of: now };
+    case "transcription":
+      return { text: "Your appointment is confirmed for Tuesday at 3 PM.", confidence: 0.98, words: 8, as_of: now };
     default:
       return { ok: true, as_of: now };
   }

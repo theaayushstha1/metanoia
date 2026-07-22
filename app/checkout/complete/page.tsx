@@ -1,14 +1,15 @@
 import Link from "next/link";
-import { getPayment } from "@/lib/hyperswitch";
+import { getPayment, type PaymentResponse } from "@/lib/hyperswitch";
 import { confirmPaid } from "@/lib/checkout";
 import {
   getAttempt,
+  recordAttempt,
   getCredential,
   getSubscriptions,
   getIntentMandate,
   getSavedPaymentMethod,
 } from "@/lib/store";
-import { getPlan, formatUsd } from "@/lib/catalog";
+import { CATALOG, getPlan, formatUsd, type Plan } from "@/lib/catalog";
 import { DEMO_CUSTOMER } from "@/lib/constants";
 import { TopBar, Pill, Icon, LiveDot, usd } from "../../components/ui";
 import CapabilityProbe from "./CapabilityProbe";
@@ -23,7 +24,24 @@ const PHRASE: Record<string, string> = {
   "vector-search": "run vector search",
   geocoding: "geocode addresses",
   compute: "run GPU jobs",
+  transcription: "transcribe audio",
 };
+
+/** Recover checkout context when a local in-memory store was reset after payment. */
+function planFromPayment(payment: PaymentResponse): Plan | undefined {
+  const metadata = payment.metadata;
+  if (metadata && typeof metadata === "object" && "plan_id" in metadata) {
+    const planId = (metadata as { plan_id?: unknown }).plan_id;
+    if (typeof planId === "string") return getPlan(planId);
+  }
+
+  const description = typeof payment.description === "string" ? payment.description : "";
+  return CATALOG.find(
+    (candidate) =>
+      candidate.priceCents === payment.amount &&
+      description.startsWith(`${candidate.name} (${candidate.vendor})`)
+  );
+}
 
 export default async function CompletePage({
   searchParams,
@@ -43,18 +61,33 @@ export default async function CompletePage({
       status = p.status;
       connector = p.connector;
       amountCents = p.amount;
-      if (p.status === "succeeded") confirmPaid(payment_id, { paymentMethodId: p.payment_method_id });
+      if (p.status === "succeeded") {
+        const existingAttempt = await getAttempt(payment_id);
+        if (!existingAttempt) {
+          const recoveredPlan = planFromPayment(p);
+          const customerId = typeof p.customer_id === "string" ? p.customer_id : undefined;
+          if (recoveredPlan && customerId === DEMO_CUSTOMER) {
+            await recordAttempt({
+              paymentId: payment_id,
+              customerId,
+              planId: recoveredPlan.id,
+              amountCents: p.amount,
+            });
+          }
+        }
+        await confirmPaid(payment_id, { paymentMethodId: p.payment_method_id });
+      }
     } catch (e) {
       verifyError = e instanceof Error ? e.message : "Could not verify payment";
     }
   }
 
   const ok = status === "succeeded";
-  const attempt = payment_id ? getAttempt(payment_id) : undefined;
+  const attempt = payment_id ? await getAttempt(payment_id) : undefined;
   const plan = attempt ? getPlan(attempt.planId) : undefined;
-  const credential = plan ? getCredential(DEMO_CUSTOMER, plan.id) : undefined;
-  const savedPm = plan ? getSavedPaymentMethod(DEMO_CUSTOMER, plan.id) : undefined;
-  const committed = getSubscriptions(DEMO_CUSTOMER).reduce((s, x) => s + x.amount_cents, 0);
+  const credential = plan ? await getCredential(DEMO_CUSTOMER, plan.id) : undefined;
+  const savedPm = plan ? await getSavedPaymentMethod(DEMO_CUSTOMER, plan.id) : undefined;
+  const committed = (await getSubscriptions(DEMO_CUSTOMER)).reduce((s, x) => s + x.amount_cents, 0);
   const remaining = getIntentMandate().policy.monthly_cap_cents - committed;
   const now = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
 
@@ -138,8 +171,24 @@ export default async function CompletePage({
               <div style={{ marginTop: 14, fontFamily: disp, fontWeight: 800, fontSize: 34, letterSpacing: "-.02em", animation: "rise .6s .35s both" }}>
                 Your agent can now {PHRASE[plan?.capability ?? ""] ?? "use the API"}.
               </div>
-              {plan && <CapabilityProbe resource={plan.resource} credential={credential} />}
-              {plan && <RenewPanel planId={plan.id} canRenew={Boolean(savedPm)} />}
+              {plan && (
+                <CapabilityProbe
+                  resource={plan.resource}
+                  credential={credential}
+                  capability={plan.capability}
+                />
+              )}
+              {plan && (
+                <RenewPanel
+                  planId={plan.id}
+                  canRenew={Boolean(savedPm) && connector !== "fauxpay"}
+                  blockedReason={
+                    connector === "fauxpay"
+                      ? "Fauxpay proves sandbox settlement but supports payments and refunds only. Use the Stripe path to prove off-session MIT."
+                      : undefined
+                  }
+                />
+              )}
               <div style={{ display: "flex", gap: 12, marginTop: 24, animation: "rise .6s .55s both" }}>
                 <Link href="/" className="font-body" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: "#fff", background: "linear-gradient(180deg,#3d7bff,#2b6bf3)", borderRadius: 10, padding: "12px 22px", boxShadow: "0 8px 22px rgba(43,107,243,.35)" }}>
                   Back to workbench

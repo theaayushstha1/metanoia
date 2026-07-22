@@ -11,7 +11,13 @@
  * agent actually has offers to compare.
  */
 
-export type Capability = "market-data" | "news" | "vector-search" | "geocoding" | "compute";
+export type Capability =
+  | "market-data"
+  | "news"
+  | "vector-search"
+  | "geocoding"
+  | "compute"
+  | "transcription";
 
 export interface Plan {
   id: string;
@@ -265,6 +271,52 @@ export const CATALOG: Plan[] = [
     blurb: "On-demand A100 pool, autoscaling, per-second billing.",
     bestFor: "Large-model training that explicitly requires A100 GPUs",
     resource: "/api/provider/compute_cluster",
+  },
+  // --- transcription (speech-to-text): three competing offers ---
+  {
+    id: "scribe_lite",
+    name: "Scribe Lite",
+    vendor: "Deepcast",
+    capability: "transcription",
+    category: "Speech-to-text API",
+    priceCents: 600,
+    billing: "monthly",
+    features: ["async_transcription", "40_languages"],
+    maxRps: 20,
+    uptimePct: 99.5,
+    blurb: "Batch audio-to-text in 40 languages. Upload and poll.",
+    bestFor: "Podcasts and recordings where a few minutes' delay is fine",
+    resource: "/api/provider/scribe_lite",
+  },
+  {
+    id: "voxstream",
+    name: "VoxStream",
+    vendor: "Cadence",
+    capability: "transcription",
+    category: "Speech-to-text API",
+    priceCents: 900,
+    billing: "monthly",
+    features: ["async_transcription", "realtime_streaming", "diarization"],
+    maxRps: 50,
+    uptimePct: 99.9,
+    blurb: "Live streaming transcription with speaker diarization.",
+    bestFor: "Live captions and meeting notes that need speaker labels",
+    resource: "/api/provider/voxstream",
+  },
+  {
+    id: "transcribe_ultra",
+    name: "Transcribe Ultra",
+    vendor: "Verbal",
+    capability: "transcription",
+    category: "Speech-to-text API",
+    priceCents: 1400,
+    billing: "monthly",
+    features: ["async_transcription", "realtime_streaming", "diarization", "word_timestamps"],
+    maxRps: 120,
+    uptimePct: 99.99,
+    blurb: "Low-latency streaming, diarization, and word-level timestamps.",
+    bestFor: "Production media pipelines that need precise timing",
+    resource: "/api/provider/transcribe_ultra",
   },
 ];
 

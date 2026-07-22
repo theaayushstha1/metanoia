@@ -13,11 +13,22 @@ import { z } from "zod";
 import { agentModel } from "@/lib/agent/model";
 import { CATALOG, getPlan, type Capability, type Plan } from "@/lib/catalog";
 import { getIntentMandate, getSubscriptions } from "@/lib/store";
-import { evaluateAgainstConstitution, type ConstitutionVerdict } from "@/lib/agent/spendCap";
+import {
+  evaluateAgainstConstitution,
+  type ConstitutionVerdict,
+  type ExistingSubscription,
+} from "@/lib/agent/spendCap";
 import type { CartItem } from "@/lib/ap2/mandate";
-import { rankPlans, type RankedPlan } from "@/lib/agent/ranking";
+import { rankPlans, type RankedPlan, type RankingPriority } from "@/lib/agent/ranking";
 
-const CapabilitySchema = z.enum(["market-data", "news", "vector-search", "geocoding", "compute"]);
+const CapabilitySchema = z.enum([
+  "market-data",
+  "news",
+  "vector-search",
+  "geocoding",
+  "compute",
+  "transcription",
+]);
 
 /** The model's structured proposal (validated by Zod at the tool boundary). */
 export const ProposalSchema = z.object({
@@ -105,10 +116,15 @@ Procedure:
 
 export async function runProcurement(
   request: string,
-  customerId = "metanoia_demo_customer"
+  customerId = "metanoia_demo_customer",
+  opts?: { defaultPriority?: RankingPriority }
 ): Promise<ProcurementResult> {
   let proposal: Proposal | null = null;
   const trace: TraceStep[] = [];
+
+  // Read the customer's live subscriptions once, then thread this snapshot through
+  // the (synchronous) mandate + ranking logic.
+  const existing = await getSubscriptions(customerId);
 
   const tools = {
     list_services: tool({
@@ -116,7 +132,7 @@ export async function runProcurement(
         "List the curated marketplace of onboarded vendors with structured, comparable attributes.",
       inputSchema: z.object({
         capability: z
-          .enum(["market-data", "news", "vector-search", "geocoding", "compute"])
+          .enum(["market-data", "news", "vector-search", "geocoding", "compute", "transcription"])
           .nullable()
           .optional(),
       }),
@@ -131,7 +147,8 @@ export async function runProcurement(
       execute: async ({ planId }) => {
         const plan = getPlan(planId);
         if (!plan) return { approved: false, summary: `Unknown plan ${planId}` };
-        return { approved: evaluateForPlan(plan, customerId).approved, summary: evaluateForPlan(plan, customerId).summary };
+        const v = evaluateForPlan(plan, existing);
+        return { approved: v.approved, summary: v.summary };
       },
     }),
 
@@ -158,10 +175,19 @@ export async function runProcurement(
     for (const res of step.toolResults ?? []) trace.push({ tool: res.toolName, output: res.output });
   }
 
-  return { proposal, decision: decide(proposal, customerId), trace };
+  // Personalization steer: if the model didn't set a priority, fall back to the
+  // user's learned lean. This shapes the deterministic ranking below, not the caps.
+  // `proposal` is assigned inside the recommend tool callback, so TS can't flow-narrow
+  // it here — assert the declared type back.
+  const finalProposal = proposal as Proposal | null;
+  if (finalProposal && opts?.defaultPriority && !finalProposal.normalized_requirements.priority) {
+    finalProposal.normalized_requirements.priority = opts.defaultPriority;
+  }
+
+  return { proposal: finalProposal, decision: decide(finalProposal, existing), trace };
 }
 
-function evaluateForPlan(plan: Plan, customerId: string): ConstitutionVerdict {
+function evaluateForPlan(plan: Plan, existing: ExistingSubscription[]): ConstitutionVerdict {
   const item: CartItem = {
     plan_id: plan.id,
     label: plan.name,
@@ -169,15 +195,11 @@ function evaluateForPlan(plan: Plan, customerId: string): ConstitutionVerdict {
     category: plan.category,
     amount_cents: plan.priceCents,
   };
-  return evaluateAgainstConstitution({
-    intent: getIntentMandate(),
-    item,
-    existing: getSubscriptions(customerId),
-  });
+  return evaluateAgainstConstitution({ intent: getIntentMandate(), item, existing });
 }
 
 /** Server-authoritative decision — never trusts the model for amount/verdict. */
-export function decide(proposal: Proposal | null, customerId: string): Decision {
+export function decide(proposal: Proposal | null, existing: ExistingSubscription[]): Decision {
   const selected = proposal?.selected_plan_id ?? null;
   if (!selected) {
     return { selected_plan_id: null, valid: true, confirmation_required: false, note: "No plan selected." };
@@ -202,7 +224,7 @@ export function decide(proposal: Proposal | null, customerId: string): Decision 
     };
   }
 
-  const ranked = rankProposal(proposal, customerId);
+  const ranked = rankProposal(proposal, existing);
   const selectedRank = ranked.find((candidate) => candidate.eligible);
   if (!selectedRank) {
     const closest = ranked[0];
@@ -220,7 +242,7 @@ export function decide(proposal: Proposal | null, customerId: string): Decision 
 
   const plan = selectedRank.plan;
   const verdict = selectedRank.verdict;
-  const committed = getSubscriptions(customerId).reduce((s, e) => s + e.amount_cents, 0);
+  const committed = existing.reduce((s, e) => s + e.amount_cents, 0);
   const projected = committed + plan.priceCents;
   return {
     selected_plan_id: plan.id,
@@ -237,10 +259,10 @@ export function decide(proposal: Proposal | null, customerId: string): Decision 
   };
 }
 
-export function rankProposal(proposal: Proposal, customerId: string): RankedPlan[] {
+export function rankProposal(proposal: Proposal, existing: ExistingSubscription[]): RankedPlan[] {
   return rankPlans(
     proposal.requested_capability as Capability,
     proposal.normalized_requirements,
-    customerId
+    existing
   );
 }

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
-import { seenEvent, markEvent } from "@/lib/store";
-import { confirmPaid } from "@/lib/checkout";
+import { processWebhook } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,24 +55,24 @@ export async function POST(req: NextRequest) {
   }
 
   const event = JSON.parse(rawBody) as WebhookEvent;
-
-  // Dedupe (persisted).
-  if (event.event_id) {
-    if (seenEvent(event.event_id)) {
-      return NextResponse.json({ received: true, duplicate: true }, { status: 200 });
-    }
-    markEvent(event.event_id);
-  }
-
   const payment = event.content?.object ?? event.object;
-  if (event.event_type === "payment_succeeded" && payment?.payment_id) {
-    const tsRaw = payment.updated ?? payment.created;
-    const updatedAt = tsRaw ? Date.parse(tsRaw) : undefined;
-    confirmPaid(payment.payment_id, {
-      updatedAt: Number.isNaN(updatedAt) ? undefined : updatedAt,
-      paymentMethodId: payment.payment_method_id,
-    });
-  }
+  const tsRaw = payment?.updated ?? payment?.created;
+  const parsed = tsRaw ? Date.parse(tsRaw) : undefined;
+  const updatedAt = parsed === undefined || Number.isNaN(parsed) ? undefined : parsed;
 
-  return NextResponse.json({ received: true }, { status: 200 });
+  // Dedupe + settle + subscription upsert happen in ONE transaction. An event for a
+  // payment we don't know is retained (not marked processed), never silently dropped.
+  const outcome = await processWebhook({
+    eventId: event.event_id,
+    eventType: event.event_type,
+    paymentId: payment?.payment_id,
+    paymentMethodId: payment?.payment_method_id,
+    updatedAt,
+    raw: event,
+  });
+
+  if (outcome.duplicate) {
+    return NextResponse.json({ received: true, duplicate: true }, { status: 200 });
+  }
+  return NextResponse.json({ received: true, applied: outcome.applied }, { status: 200 });
 }

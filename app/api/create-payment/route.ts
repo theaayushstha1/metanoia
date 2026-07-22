@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { initiateSubscription, hyperswitchClient } from "@/lib/checkout";
+import { getPlan } from "@/lib/catalog";
+import { addEvent } from "@/lib/memory/store";
 import { DEMO_CUSTOMER } from "@/lib/constants";
 
 export const runtime = "nodejs";
@@ -30,6 +32,19 @@ export async function POST(req: NextRequest) {
 
     if (result.refused) {
       return NextResponse.json({ refused: true, verdict: result.verdict }, { status: 403 });
+    }
+
+    // Remember the choice (consent-gated no-op otherwise). Kept at the route layer so
+    // the payment path never imports preference memory.
+    const plan = getPlan(parsed.data.planId);
+    if (plan) {
+      await addEvent(DEMO_CUSTOMER, {
+        capability: plan.capability,
+        planId: plan.id,
+        action: "selected",
+        reason: "User confirmed checkout",
+        amountCents: plan.priceCents,
+      });
     }
 
     return NextResponse.json({

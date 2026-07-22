@@ -3,9 +3,14 @@ import fs from "node:fs";
 import { decide, ProposalSchema, type Proposal } from "@/lib/agent/procure";
 import { searchMarketplace, CATALOG } from "@/lib/catalog";
 import { __resetStore } from "@/lib/store";
-import { DEMO_CUSTOMER } from "@/lib/constants";
+import type { ExistingSubscription } from "@/lib/agent/spendCap";
 
-beforeEach(() => __resetStore());
+// decide() takes an injected subscription snapshot; these tests start from none.
+const NONE: ExistingSubscription[] = [];
+
+beforeEach(async () => {
+  await __resetStore();
+});
 
 function proposal(over: Partial<Proposal>): Proposal {
   return {
@@ -40,7 +45,7 @@ describe("marketplace", () => {
 
 describe("server-authoritative decide()", () => {
   it("approves a within-mandate plan using server-side pricing", () => {
-    const d = decide(proposal({ selected_plan_id: "tickstream_pro" }), DEMO_CUSTOMER);
+    const d = decide(proposal({ selected_plan_id: "tickstream_pro" }), NONE);
     expect(d.valid).toBe(true);
     expect(d.verdict?.approved).toBe(true);
     expect(d.plan?.price_cents).toBe(2900); // server price, not model-supplied
@@ -51,7 +56,7 @@ describe("server-authoritative decide()", () => {
   it("cannot be tricked into an over-cap plan (mandate bypass attempt)", () => {
     // Even if the model selects premium, the deterministic server ranking chooses
     // the highest-ranked eligible plan and never authorizes the over-cap option.
-    const ultra = decide(proposal({ selected_plan_id: "realtime_ultra" }), DEMO_CUSTOMER);
+    const ultra = decide(proposal({ selected_plan_id: "realtime_ultra" }), NONE);
     expect(ultra.valid).toBe(true);
     expect(ultra.selected_plan_id).toBe("tickstream_pro");
     expect(ultra.model_selected_plan_id).toBe("realtime_ultra");
@@ -64,26 +69,26 @@ describe("server-authoritative decide()", () => {
         selected_plan_id: "compute_cluster",
         normalized_requirements: { required_features: ["gpu_a100"] },
       }),
-      DEMO_CUSTOMER
+      NONE
     );
     expect(compute.verdict?.approved).toBe(false); // $59 > $40
     expect(compute.confirmation_required).toBe(false);
   });
 
   it("rejects a model selection from the wrong capability", () => {
-    const d = decide(proposal({ selected_plan_id: "newsfeed_ai" }), DEMO_CUSTOMER);
+    const d = decide(proposal({ selected_plan_id: "newsfeed_ai" }), NONE);
     expect(d.valid).toBe(false);
     expect(d.confirmation_required).toBe(false);
   });
 
   it("fails safe on a hallucinated / unknown plan id", () => {
-    const d = decide(proposal({ selected_plan_id: "totally_made_up" }), DEMO_CUSTOMER);
+    const d = decide(proposal({ selected_plan_id: "totally_made_up" }), NONE);
     expect(d.valid).toBe(false);
     expect(d.confirmation_required).toBe(false);
   });
 
   it("handles no selection cleanly", () => {
-    const d = decide(proposal({ selected_plan_id: null }), DEMO_CUSTOMER);
+    const d = decide(proposal({ selected_plan_id: null }), NONE);
     expect(d.valid).toBe(true);
     expect(d.selected_plan_id).toBeNull();
   });

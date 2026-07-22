@@ -101,6 +101,22 @@ body {
     grid-template-columns: 1fr !important;
   }
 
+  .mn-scout-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .mn-scout-cell {
+    border-left: 0 !important;
+  }
+
+  .mn-scout-cell:nth-child(even) {
+    border-left: 1px solid var(--line-2) !important;
+  }
+
+  .mn-scout-cell:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--line-2);
+  }
+
   .mn-checkout-summary {
     border-right: 0 !important;
     border-bottom: 1px solid var(--line-2);
@@ -176,6 +192,19 @@ body {
   .mn-capability-probe {
     padding: 16px !important;
   }
+
+  .mn-scout-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .mn-scout-cell {
+    border-left: 0 !important;
+    border-bottom: 1px solid var(--line-2);
+  }
+
+  .mn-scout-cell:last-child {
+    border-bottom: 0;
+  }
 }
 
 @keyframes rise {
@@ -244,21 +273,6 @@ body {
     stroke-dashoffset: 0;
   }
 }
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@keyframes ring {
-  0% {
-    transform: scale(0.7);
-    opacity: 0.6;
-  }
-  100% {
-    transform: scale(2.3);
-    opacity: 0;
-  }
-}
 @keyframes shimmer {
   0% {
     background-position: -220% 0;
@@ -284,5 +298,45 @@ body {
   100% {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+/* ── live-capability demo ─────────────────────────────────────────────── */
+@keyframes mnwave {
+  0%, 100% { transform: scaleY(0.22); }
+  50% { transform: scaleY(1); }
+}
+@keyframes mnripple {
+  0% { transform: scale(0.7); opacity: 0.7; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+@keyframes mnfold {
+  0% { transform: perspective(200px) rotateX(-90deg) scale(0.7); opacity: 0; }
+  60% { transform: perspective(200px) rotateX(12deg) scale(1.04); opacity: 1; }
+  100% { transform: perspective(200px) rotateX(0deg) scale(1); opacity: 1; }
+}
+@keyframes mndraw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes mndrop {
+  0% { transform: translate(-50%, -260%); opacity: 0; }
+  70% { transform: translate(-50%, -85%); opacity: 1; }
+  85% { transform: translate(-50%, -108%); }
+  100% { transform: translate(-50%, -100%); }
+}
+@keyframes mnlight {
+  0% { opacity: 0; transform: scale(0.6); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes mngrow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mn-live *,
+  .mn-live {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

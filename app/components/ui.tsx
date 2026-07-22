@@ -2,27 +2,36 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 
 /* ── Logo ─────────────────────────────────────────────────────────────── */
-export function Logo({ size = 26 }: { size?: number }) {
-  const id = `mn-lg-${size}`;
+/**
+ * The Metanoia mark: an "M" reflected into its own inversion across a center axis
+ * — the letter and its transformation held in one form (metanoia = the turn).
+ * Monoline, single stroke weight. The shared logo stays unboxed so the mark reads
+ * cleanly at both navigation and display sizes.
+ */
+export function Mark({ size = 20, color = "currentColor", sw = 9 }: { size?: number; color?: string; sw?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden>
-      <defs>
-        <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#4D8CFF" />
-          <stop offset="1" stopColor="#1E54D0" />
-        </linearGradient>
-      </defs>
-      <rect width="48" height="48" rx="13" fill={`url(#${id})`} />
-      <path
-        d="M13 33V15.5l7.5 9L24 18l3.5 6.5 7.5-9V33"
-        fill="none"
-        stroke="#fff"
-        strokeWidth="3.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="24" cy="30" r="2.2" fill="#fff" />
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M22 50 L22 24 L50 44 L78 24 L78 50" />
+      <path d="M22 50 L22 76 L50 56 L78 76 L78 50" />
     </svg>
+  );
+}
+
+export function Logo({ size = 26 }: { size?: number }) {
+  return (
+    <span
+      style={{
+        width: size,
+        height: size,
+        flex: "none",
+        display: "grid",
+        placeItems: "center",
+        color: "#2b6bf3",
+        filter: "drop-shadow(0 2px 2px rgba(77,140,255,.28)) drop-shadow(0 5px 8px rgba(30,84,208,.12))",
+      }}
+    >
+      <Mark size={size} color="currentColor" sw={8} />
+    </span>
   );
 }
 

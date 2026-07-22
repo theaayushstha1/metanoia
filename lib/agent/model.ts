@@ -31,6 +31,8 @@ export const vertex = createVertex({
 /** Lazy model handles keep imports safe in tests that do not configure Vertex. */
 export const agentModel = () => vertex("gemini-3.1-pro-preview");
 export const fastModel = () => vertex("gemini-3.6-flash");
+/** Stable, low-latency model for the four parallel advisory scouts. */
+export const scoutModel = () => vertex("gemini-2.5-flash");
 
 export function assertVertexConfigured() {
   if (!project) {

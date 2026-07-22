@@ -46,10 +46,12 @@ async function subscribe(planId: string) {
     { planId, customerId: CUSTOMER, returnUrl: RETURN_URL },
     fakePaymentClient()
   );
-  if (!r.refused) confirmPaid(r.paymentId, { paymentMethodId: "pm_1" });
+  if (!r.refused) await confirmPaid(r.paymentId, { paymentMethodId: "pm_1" });
 }
 
-beforeEach(() => __resetStore());
+beforeEach(async () => {
+  await __resetStore();
+});
 
 describe("renewal mandate re-check", () => {
   it("excludes the current subscription (no double-count) when renewing", async () => {
@@ -57,11 +59,11 @@ describe("renewal mandate re-check", () => {
     await subscribe("newsfeed_ai"); //   $15  -> committed $54
     // Renewing vector at $39: others ($15) + $39 = $54 <= $60 -> allowed.
     // If it double-counted vector it'd be $54 + $39 = $93 -> refused.
-    expect(evaluateRenewal("vector_search", CUSTOMER, 3900).approved).toBe(true);
+    expect((await evaluateRenewal("vector_search", CUSTOMER, 3900)).approved).toBe(true);
   });
 
-  it("refuses a renewal whose increased price breaks the per-charge cap", () => {
-    const v = evaluateRenewal("vector_search", CUSTOMER, 5000); // vendor raised to $50 > $40 cap
+  it("refuses a renewal whose increased price breaks the per-charge cap", async () => {
+    const v = await evaluateRenewal("vector_search", CUSTOMER, 5000); // vendor raised to $50 > $40 cap
     expect(v.approved).toBe(false);
     expect(v.checks.find((c) => c.rule === "per_charge_cap")?.passed).toBe(false);
   });
@@ -78,7 +80,7 @@ describe("renewSubscription", () => {
 
   it("charges once, stays idempotent, and does not duplicate the subscription", async () => {
     await subscribe("vector_search");
-    expect(getSubscriptions(CUSTOMER)).toHaveLength(1);
+    expect(await getSubscriptions(CUSTOMER)).toHaveLength(1);
 
     const client = fakeRenewalClient();
     const now = new Date("2026-08-01T00:00:00Z");
@@ -88,6 +90,6 @@ describe("renewSubscription", () => {
     expect(r1.ok).toBe(true);
     expect(r2.ok).toBe(true);
     if (r1.ok && r2.ok) expect(r1.paymentId).toBe(r2.paymentId); // same period -> same id
-    expect(getSubscriptions(CUSTOMER)).toHaveLength(1); // no duplicate
+    expect(await getSubscriptions(CUSTOMER)).toHaveLength(1); // no duplicate
   });
 });

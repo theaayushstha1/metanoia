@@ -19,7 +19,15 @@ interface RenewResult {
  * with no card entry and no human. Only shown when a saved payment method exists
  * (a mandate-capable connector like Stripe returned a payment_method_id).
  */
-export default function RenewPanel({ planId, canRenew }: { planId: string; canRenew: boolean }) {
+export default function RenewPanel({
+  planId,
+  canRenew,
+  blockedReason,
+}: {
+  planId: string;
+  canRenew: boolean;
+  blockedReason?: string;
+}) {
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [res, setRes] = useState<RenewResult>({});
 
@@ -75,8 +83,8 @@ export default function RenewPanel({ planId, canRenew }: { planId: string; canRe
           </span>
         </div>
         <p style={{ margin: "8px 0 0", fontSize: 12.5, lineHeight: 1.55, color: "var(--muted)" }}>
-          Off-session renewal needs a saved card. This charge settled on a connector that
-          didn&apos;t return a reusable payment method. Pay through the Stripe path to enable MIT.
+          {blockedReason ??
+            "Off-session renewal needs a reusable payment method from a mandate-capable connector. Pay through the Stripe path to enable MIT."}
         </p>
       </>,
       "muted"

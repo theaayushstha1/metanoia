@@ -13,6 +13,7 @@ import {
   getSubscriptions,
   recordAttempt,
   markPaymentSucceeded,
+  markPaymentFailed,
   getSavedPaymentMethod,
 } from "@/lib/store";
 import { evaluateAgainstConstitution, type ConstitutionVerdict } from "@/lib/agent/spendCap";
@@ -30,6 +31,7 @@ export interface PaymentClient {
     currency?: string;
     customerId: string;
     description?: string;
+    metadata?: Record<string, string>;
     saveForFutureUse?: boolean;
     returnUrl: string;
     paymentId?: string;
@@ -72,7 +74,7 @@ export async function initiateSubscription(
   const verdict = evaluateAgainstConstitution({
     intent: getIntentMandate(),
     item,
-    existing: getSubscriptions(args.customerId),
+    existing: await getSubscriptions(args.customerId),
     now: args.now,
   });
   if (!verdict.approved) {
@@ -88,12 +90,19 @@ export async function initiateSubscription(
     currency: "USD",
     customerId: args.customerId,
     description: `${plan.name} (${plan.vendor}) — ${plan.billing}`,
+    metadata: {
+      plan_id: plan.id,
+      customer_id: args.customerId,
+      flow: "initial_subscription",
+    },
     saveForFutureUse: true,
     returnUrl: args.returnUrl,
     paymentId,
   });
+  // No money moved here (confirm:false), so recording after we know the real id is
+  // safe. The browser SDK charges next; the webhook/receipt settles this attempt.
   const actualId = payment.payment_id || paymentId;
-  recordAttempt({
+  await recordAttempt({
     paymentId: actualId,
     customerId: args.customerId,
     planId: plan.id,
@@ -110,11 +119,11 @@ export async function initiateSubscription(
 }
 
 /** Idempotently record a verified payment as a live subscription. */
-export function confirmPaid(
+export async function confirmPaid(
   paymentId: string,
   opts?: { updatedAt?: number; paymentMethodId?: string }
-): void {
-  markPaymentSucceeded(paymentId, opts);
+): Promise<void> {
+  await markPaymentSucceeded(paymentId, opts);
 }
 
 // ── Renewals (off-session MIT) ─────────────────────────────────────────────
@@ -127,6 +136,7 @@ export interface RenewalClient {
     paymentMethodId: string;
     paymentId?: string;
     description?: string;
+    metadata?: Record<string, string>;
   }): Promise<PaymentResponse>;
 }
 export const hyperswitchRenewalClient: RenewalClient = { chargeSavedMethod };
@@ -137,11 +147,11 @@ export const hyperswitchRenewalClient: RenewalClient = { chargeSavedMethod };
  * price is used — a vendor price increase is checked against the caps, not the old
  * price. A renewal that now violates the mandate is refused before any charge.
  */
-export function evaluateRenewal(
+export async function evaluateRenewal(
   planId: string,
   customerId: string,
   currentAmountCents: number
-): ConstitutionVerdict {
+): Promise<ConstitutionVerdict> {
   const plan = getPlan(planId);
   if (!plan) throw new Error(`Unknown plan: ${planId}`);
   const item: CartItem = {
@@ -151,7 +161,7 @@ export function evaluateRenewal(
     category: plan.category,
     amount_cents: currentAmountCents,
   };
-  const existingOthers = getSubscriptions(customerId).filter((s) => s.plan_id !== planId);
+  const existingOthers = (await getSubscriptions(customerId)).filter((s) => s.plan_id !== planId);
   return evaluateAgainstConstitution({ intent: getIntentMandate(), item, existing: existingOthers });
 }
 
@@ -167,7 +177,7 @@ export async function renewSubscription(
   const plan = getPlan(args.planId);
   if (!plan) return { ok: false, code: 400, error: `Unknown plan: ${args.planId}` };
 
-  const paymentMethodId = getSavedPaymentMethod(args.customerId, args.planId);
+  const paymentMethodId = await getSavedPaymentMethod(args.customerId, args.planId);
   if (!paymentMethodId) {
     return { ok: false, code: 409, error: "No saved payment method for this subscription yet." };
   }
@@ -176,14 +186,17 @@ export async function renewSubscription(
   const amount = plan.priceCents;
 
   // 1) Re-run the mandate BEFORE charging. Every autonomous renewal is gated.
-  const verdict = evaluateRenewal(args.planId, args.customerId, amount);
+  const verdict = await evaluateRenewal(args.planId, args.customerId, amount);
   if (!verdict.approved) {
     return { ok: false, refused: true, verdict };
   }
 
-  // 2) Charge off-session. Billing-period id keeps retries idempotent.
+  // 2) Pending-first: write a durable attempt BEFORE the charge, then charge with
+  // that SAME id as the idempotency key, then settle it. If we crash after the
+  // charge, the pending row is an audit trail the webhook/reconciler can settle —
+  // money is never taken without a record.
   const paymentId = stablePaymentId(`${args.customerId}:${plan.id}:${billingPeriod(args.now)}:renewal`);
-  recordAttempt({ paymentId, customerId: args.customerId, planId: plan.id, amountCents: amount });
+  await recordAttempt({ paymentId, customerId: args.customerId, planId: plan.id, amountCents: amount });
   const payment = await client.chargeSavedMethod({
     amount,
     currency: "USD",
@@ -191,10 +204,17 @@ export async function renewSubscription(
     paymentMethodId,
     paymentId,
     description: `Renewal — ${plan.name}`,
+    metadata: {
+      plan_id: plan.id,
+      customer_id: args.customerId,
+      flow: "renewal",
+    },
   });
 
   if (payment.status === "succeeded") {
-    confirmPaid(payment.payment_id || paymentId, { paymentMethodId });
+    await confirmPaid(paymentId, { paymentMethodId });
+  } else {
+    await markPaymentFailed(paymentId);
   }
-  return { ok: true, verdict, paymentId: payment.payment_id || paymentId, status: payment.status };
+  return { ok: true, verdict, paymentId, status: payment.status };
 }

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import MemoryPanel from "./MemoryPanel";
 import { useRouter } from "next/navigation";
-import { Icon, Pill, LiveDot, TopBar, usd } from "./components/ui";
+import { Icon, Mark, Pill, LiveDot, TopBar, usd } from "./components/ui";
 
 /* ── types (mirror /api/agent/plan) ───────────────────────────────────── */
 interface Candidate {
@@ -67,11 +68,24 @@ interface Blocked {
   plan: Candidate;
   verdict: Verdict;
 }
+interface ScoutReport {
+  lens: "price" | "value" | "quality" | "market";
+  label: string;
+  status: "complete" | "unavailable";
+  scope: "onboarded_catalog" | "external_research";
+  winner_plan_id: string | null;
+  headline: string;
+  summary: string;
+  observations: { plan_id: string; score: number; evidence: string; concern: string | null }[];
+  external_signals: { provider: string; signal: string }[];
+  sources: { title: string; url: string }[];
+}
 interface Result {
   proposal: Proposal | null;
   decision: Decision;
   trace: { tool?: string; input?: unknown; output?: unknown }[];
   candidates: Candidate[];
+  scouts: ScoutReport[];
   blocked: Blocked | null;
   context: {
     profileSummary?: string;
@@ -93,6 +107,7 @@ const PRESETS: Record<string, string> = {
   "market-data":
     "Find the best market-data API: real-time US equities, websockets, ≥60 req/s, under $50/month.",
   news: "I need a news API with LLM summaries, under $20/month.",
+  transcription: "Find me the best transcription (speech-to-text) service for $10 a month.",
   "over-budget": "Get me an A100 GPU compute API for large-model training. A100 is a hard requirement.",
 };
 
@@ -217,48 +232,38 @@ export default function Workbench({ mandate }: { mandate: Mandate }) {
 
 /* ══ PROCESSING ════════════════════════════════════════════════════════ */
 function Processing() {
+  // A static description of the server-side pipeline. We can't observe the agent's
+  // real steps in-flight, so we don't fake per-step completion — the honest live
+  // signal is the indeterminate motion below; the real trace shows after completion.
   const steps = [
-    { t: "Reading your request", d: "extracting hard requirements" },
-    { t: "Scanning the marketplace", d: "15 curated offers" },
-    { t: "Comparing offers", d: "price · throughput · reliability" },
-    { t: "Checking your mandate", d: "SpendGuard, in order" },
-    { t: "Finalizing the pick", d: "assembling the proposal" },
+    { t: "Reads your request", d: "extracting hard requirements" },
+    { t: "Scans the marketplace", d: "15 curated offers" },
+    { t: "Compares offers", d: "price · throughput · reliability" },
+    { t: "Checks your mandate", d: "SpendGuard, in order" },
+    { t: "Finalizes the pick", d: "assembling the proposal" },
   ];
-  const [step, setStep] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setStep((s) => (s < steps.length - 1 ? s + 1 : s)), 1250);
-    return () => clearInterval(id);
-  }, [steps.length]);
 
   return (
     <div style={{ padding: "72px 24px 96px", display: "flex", flexDirection: "column", alignItems: "center" }}>
       {/* emblem */}
-      <div style={{ position: "relative", width: 150, height: 150, display: "grid", placeItems: "center" }}>
-        {[0, 1, 2].map((i) => (
-          <span
-            key={i}
-            style={{ position: "absolute", width: 80, height: 80, borderRadius: "50%", border: "1.5px solid var(--accent-line)", animation: `ring 2.4s ease-out ${i * 0.8}s infinite` }}
-          />
-        ))}
-        <svg width="112" height="112" viewBox="0 0 112 112" style={{ position: "absolute", animation: "spin 3.6s linear infinite" }}>
-          <circle cx="56" cy="56" r="52" fill="none" stroke="var(--blue)" strokeWidth="2" strokeDasharray="10 14" strokeLinecap="round" opacity="0.5" />
-        </svg>
-        <svg width="86" height="86" viewBox="0 0 86 86" style={{ position: "absolute", animation: "spin 1.4s linear infinite" }}>
-          <circle cx="43" cy="43" r="39" fill="none" stroke="var(--blue)" strokeWidth="3" strokeDasharray="60 200" strokeLinecap="round" />
-        </svg>
+      <div
+        style={{
+          width: 96,
+          height: 96,
+          display: "grid",
+          placeItems: "center",
+          color: "#2b6bf3",
+          filter: "drop-shadow(0 4px 4px rgba(77,140,255,.28)) drop-shadow(0 12px 18px rgba(30,84,208,.14))",
+          animation: "bob 2s ease-in-out infinite",
+        }}
+      >
         <span
           style={{
-            width: 56,
-            height: 56,
-            borderRadius: 16,
-            background: "linear-gradient(135deg,#4d8cff,#1e54d0)",
             display: "grid",
             placeItems: "center",
-            boxShadow: "0 10px 30px rgba(43,107,243,.4)",
-            animation: "bob 2s ease-in-out infinite",
           }}
         >
-          <Icon.sparkle size={26} color="#fff" />
+          <Mark size={72} color="currentColor" sw={7} />
         </span>
       </div>
 
@@ -269,39 +274,18 @@ function Processing() {
         Finding your best option…
       </div>
 
-      <div style={{ marginTop: 32, width: "100%", maxWidth: 440, display: "grid", gap: 2 }}>
-        {steps.map((s, i) => {
-          const state = i < step ? "done" : i === step ? "active" : "todo";
-          return (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 14,
-                padding: "12px 16px",
-                borderRadius: 10,
-                background: state === "active" ? "var(--accent-bg)" : "transparent",
-                opacity: state === "todo" ? 0.4 : 1,
-                transition: "all .3s",
-              }}
-            >
+      <div style={{ marginTop: 32, width: "100%", maxWidth: 440 }}>
+        <div className="font-mono" style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".14em", color: "var(--faint)", marginBottom: 12, paddingLeft: 4 }}>
+          PROCUREMENT PIPELINE
+        </div>
+        <div style={{ display: "grid", gap: 2 }}>
+          {steps.map((s, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 14, padding: "11px 16px", borderRadius: 10 }}>
               <span style={{ width: 22, height: 22, display: "grid", placeItems: "center", flex: "none" }}>
-                {state === "done" ? (
-                  <span style={{ width: 20, height: 20, borderRadius: "50%", background: "var(--green-bg)", display: "grid", placeItems: "center" }}>
-                    <Icon.check size={11} color="var(--green)" sw={3} />
-                  </span>
-                ) : state === "active" ? (
-                  <svg width="20" height="20" viewBox="0 0 20 20" style={{ animation: "spin .8s linear infinite" }}>
-                    <circle cx="10" cy="10" r="8" fill="none" stroke="var(--accent-line)" strokeWidth="2.5" />
-                    <path d="M10 2a8 8 0 0 1 8 8" fill="none" stroke="var(--blue)" strokeWidth="2.5" strokeLinecap="round" />
-                  </svg>
-                ) : (
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--faint)" }} />
-                )}
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent-line)" }} />
               </span>
               <span style={{ flex: 1 }}>
-                <span className="font-body" style={{ display: "block", fontSize: 13.5, fontWeight: state === "active" ? 700 : 600, color: state === "active" ? blue : "var(--ink)" }}>
+                <span className="font-body" style={{ display: "block", fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>
                   {s.t}
                 </span>
                 <span className="font-mono" style={{ fontSize: 10.5, color: "var(--muted)" }}>
@@ -309,15 +293,15 @@ function Processing() {
                 </span>
               </span>
             </div>
-          );
-        })}
+          ))}
+        </div>
       </div>
 
       <div style={{ marginTop: 26, width: "100%", maxWidth: 440, height: 4, borderRadius: 3, overflow: "hidden", background: "var(--line-2)" }}>
         <div style={{ height: "100%", width: "100%", background: "linear-gradient(90deg,transparent,var(--blue),transparent)", backgroundSize: "220% 100%", animation: "shimmer 1.4s linear infinite" }} />
       </div>
       <div className="font-mono" style={{ marginTop: 14, fontSize: 10, letterSpacing: ".1em", color: "var(--faint)" }}>
-        GEMINI 3.1 PRO · REASONING LIVE
+        RUNNING ON GEMINI 3.1 PRO
       </div>
     </div>
   );
@@ -485,6 +469,8 @@ function Home({
 
       <ContextPanel context={context} setContext={setContext} />
 
+      <MemoryPanel />
+
       {/* command input */}
       <div className="mn-page-pad" style={{ padding: "26px 64px 40px", animation: "rise .7s .4s both" }}>
         <div
@@ -537,6 +523,9 @@ function Home({
               </PresetChip>
               <PresetChip label="news" onClick={() => setRequest(PRESETS["news"])}>
                 <Icon.news size={12} />
+              </PresetChip>
+              <PresetChip label="transcription" onClick={() => setRequest(PRESETS["transcription"])}>
+                <Icon.sparkle size={12} />
               </PresetChip>
               <PresetChip label="over-budget" onClick={() => setRequest(PRESETS["over-budget"])}>
                 <Icon.grid size={12} />
@@ -654,18 +643,20 @@ function ContextPanel({
               placeholder="A research dashboard serving live market data to 500 users..."
             />
           </ContextField>
-          <ContextField label="GITHUB REPOSITORIES" hint="up to 5 public repository URLs">
-            <input
+          <ContextField label="GITHUB REPOSITORIES" hint="up to 5 · paste, then Enter">
+            <MultiUrlInput
               value={context.githubRepos}
-              onChange={(event) => field("githubRepos", event.target.value)}
-              placeholder="https://github.com/owner/repository"
+              onChange={(v) => field("githubRepos", v)}
+              max={5}
+              placeholder="https://github.com/owner/repo"
             />
           </ContextField>
-          <ContextField label="PROFILE LINKS" hint="LinkedIn, X, portfolio; reference only">
-            <input
+          <ContextField label="PROFILE LINKS" hint="LinkedIn, X, portfolio · paste, then Enter">
+            <MultiUrlInput
               value={context.socialLinks}
-              onChange={(event) => field("socialLinks", event.target.value)}
-              placeholder="https://linkedin.com/in/..."
+              onChange={(v) => field("socialLinks", v)}
+              max={4}
+              placeholder="https://linkedin.com/in/…"
             />
           </ContextField>
         </div>
@@ -683,6 +674,118 @@ function ContextField({ label, hint, children }: { label: string; hint: string; 
       </span>
       {children}
     </label>
+  );
+}
+
+/* Paste a URL and hit Enter (or comma) to add it as a chip; paste several at once
+   and they all get added. Backspace on an empty field removes the last chip.
+   Stores its value as a newline-joined string so the parent contract is unchanged. */
+function MultiUrlInput({
+  value,
+  onChange,
+  max,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  max: number;
+  placeholder: string;
+}) {
+  const items = splitLines(value);
+  const [draft, setDraft] = useState("");
+
+  const addMany = (raws: string[]) => {
+    const next = [...items];
+    for (const raw of raws) {
+      const t = raw.trim().replace(/[,\s]+$/, "");
+      if (!t) continue;
+      const url = /^https?:\/\//i.test(t) ? t : `https://${t}`;
+      if (!next.includes(url) && next.length < max) next.push(url);
+    }
+    onChange(next.join("\n"));
+    setDraft("");
+  };
+
+  const label = (u: string) =>
+    u.replace(/^https?:\/\/(www\.)?/i, "").replace(/^github\.com\//i, "").replace(/\/$/, "");
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 6,
+        alignItems: "center",
+        border: "1px solid var(--line-3)",
+        borderRadius: 9,
+        background: "#fff",
+        padding: "7px 8px",
+        minHeight: 42,
+      }}
+    >
+      {items.map((u) => (
+        <span
+          key={u}
+          className="font-mono"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            maxWidth: "100%",
+            fontSize: 11,
+            fontWeight: 500,
+            color: blue,
+            background: "var(--accent-bg)",
+            border: "1px solid var(--accent-line)",
+            borderRadius: 7,
+            padding: "4px 6px 4px 9px",
+          }}
+        >
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label(u)}</span>
+          <button
+            type="button"
+            onClick={() => onChange(items.filter((x) => x !== u).join("\n"))}
+            aria-label={`Remove ${label(u)}`}
+            style={{ border: "none", background: "transparent", color: blue, cursor: "pointer", lineHeight: 1, fontSize: 14, padding: 0 }}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      {items.length < max && (
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
+              addMany([draft]);
+            } else if (e.key === "Backspace" && !draft && items.length) {
+              onChange(items.slice(0, -1).join("\n"));
+            }
+          }}
+          onPaste={(e) => {
+            const text = e.clipboardData.getData("text");
+            if (/[\s,]/.test(text.trim())) {
+              e.preventDefault();
+              addMany(text.split(/[\s,]+/));
+            }
+          }}
+          onBlur={() => draft && addMany([draft])}
+          placeholder={items.length ? "Add another, then Enter" : placeholder}
+          style={{
+            flex: 1,
+            minWidth: 150,
+            border: "none",
+            outline: "none",
+            background: "transparent",
+            boxShadow: "none",
+            padding: "3px 2px",
+            width: "auto",
+          }}
+        />
+      )}
+    </div>
   );
 }
 
@@ -812,6 +915,7 @@ function AgentResult({
   const capMark = Math.min(100, (mandate.perCharge / mandate.monthly) * 100);
   const importedRepos = result.context.repositories.filter((repo) => repo.imported).length;
   const requirements = requirementSummary(result.proposal);
+  const completedScouts = result.scouts?.filter((scout) => scout.status === "complete").length ?? 0;
 
   return (
     <div className="mn-result-layout" style={{ display: "grid", gridTemplateColumns: "390px 1fr", minHeight: 620 }}>
@@ -832,8 +936,9 @@ function AgentResult({
             title="ranked three offers"
             sub="fit + price + reliability + throughput"
           />
-          <TraceStep i={3} title="checked your mandate" sub={`${d.plan?.name} · allowed`} subColor="var(--green)" />
-          <TraceStep i={4} title="waiting for you" active />
+          <TraceStep i={3} title="ran specialist review" sub={`${completedScouts}/4 scouts returned · advisory only`} />
+          <TraceStep i={4} title="checked your mandate" sub={`${d.plan?.name} · allowed`} subColor="var(--green)" />
+          <TraceStep i={5} title="waiting for you" active />
         </div>
         <div style={{ marginTop: "auto", border: "1px solid var(--line-3)", background: "#fff", borderRadius: 10, padding: "16px 18px" }}>
           <div className="font-mono" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 10, fontWeight: 600, letterSpacing: ".12em" }}>
@@ -878,6 +983,8 @@ function AgentResult({
             <OfferRow key={c.id} c={c} selected={c.id === d.selected_plan_id} onChoose={onConfirm} />
           ))}
         </div>
+
+        <ScoutPanel scouts={result.scouts ?? []} candidates={result.candidates} />
 
         <div className="mn-result-cards" style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 16, marginTop: 16 }}>
           {/* the pick */}
@@ -968,6 +1075,76 @@ function AgentResult({
         <CounterBar onRefine={onRefine} />
       </div>
     </div>
+  );
+}
+
+function ScoutPanel({ scouts, candidates }: { scouts: ScoutReport[]; candidates: Candidate[] }) {
+  if (!scouts.length) return null;
+  const candidateNames = new Map(candidates.map((candidate) => [candidate.id, candidate.name]));
+
+  return (
+    <section style={{ marginTop: 16, border: "1px solid var(--line-3)", borderRadius: 8, overflow: "hidden", background: "#fff" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "12px 16px", borderBottom: "1px solid var(--line-2)", background: "var(--panel)" }}>
+        <Icon.nodes size={14} color={blue} />
+        <span className="font-mono" style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".14em" }}>
+          FOUR SPECIALIST PERSPECTIVES
+        </span>
+        <span style={{ marginLeft: "auto" }}>
+          <Pill tone="blue">ADVISORY ONLY</Pill>
+        </span>
+      </div>
+      <div className="mn-scout-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))" }}>
+        {scouts.map((scout, index) => {
+          const winner = scout.winner_plan_id ? candidateNames.get(scout.winner_plan_id) : null;
+          const winnerObservation = scout.observations.find((item) => item.plan_id === scout.winner_plan_id) ?? scout.observations[0];
+          return (
+            <article
+              key={scout.lens}
+              className="mn-scout-cell"
+              style={{ minWidth: 0, padding: "17px 16px 18px", borderLeft: index ? "1px solid var(--line-2)" : undefined }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <span className="font-mono" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".12em", color: blue }}>
+                  {scout.label.toUpperCase()}
+                </span>
+                <span className="font-mono" style={{ fontSize: 8.5, color: scout.status === "complete" ? "var(--green)" : "var(--red)" }}>
+                  {scout.status === "complete" ? "RETURNED" : "UNAVAILABLE"}
+                </span>
+              </div>
+              <h3 style={{ margin: "9px 0 0", fontFamily: disp, fontSize: 16, lineHeight: 1.2, letterSpacing: 0 }}>
+                {winner ?? scout.headline}
+              </h3>
+              {winner && (
+                <div className="font-mono" style={{ marginTop: 4, fontSize: 9, color: "var(--faint)" }}>
+                  {scout.headline}
+                </div>
+              )}
+              <p style={{ margin: "9px 0 0", fontSize: 11.5, lineHeight: 1.5, color: "var(--muted)" }}>
+                {winnerObservation?.evidence ?? scout.summary}
+              </p>
+              {scout.external_signals.slice(0, 2).map((signal) => (
+                <div key={signal.provider} style={{ marginTop: 9, paddingTop: 9, borderTop: "1px solid var(--line-2)" }}>
+                  <strong style={{ display: "block", fontSize: 11.5 }}>{signal.provider}</strong>
+                  <span style={{ display: "block", marginTop: 2, fontSize: 10.5, lineHeight: 1.4, color: "var(--muted)" }}>{signal.signal}</span>
+                </div>
+              ))}
+              {scout.sources.length > 0 && (
+                <div className="font-mono" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10, fontSize: 9 }}>
+                  {scout.sources.slice(0, 3).map((source, sourceIndex) => (
+                    <a key={source.url} href={source.url} target="_blank" rel="noreferrer" style={{ color: blue }} title={source.title}>
+                      SOURCE {sourceIndex + 1}
+                    </a>
+                  ))}
+                </div>
+              )}
+              <div className="font-mono" style={{ marginTop: 11, fontSize: 8.5, color: "var(--faint)", letterSpacing: ".06em" }}>
+                {scout.scope === "external_research" ? "RESEARCH ONLY · NOT ONBOARDED" : "ONBOARDED CATALOG"}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -1175,12 +1352,59 @@ function shortDetail(c: Check): string {
 }
 
 /* ══ 1c REFUSED ════════════════════════════════════════════════════════ */
+/* Honest empty state: the request isn't something the marketplace carries. Neutral,
+   not the red "Denied" screen — a budget refusal and "we don't sell that" are
+   different truths and must read differently. */
+function NoMatch({ onReset }: { onReset: () => void }) {
+  return (
+    <div style={{ padding: "80px 64px", position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", inset: 0, background: "radial-gradient(600px 300px at 20% 0,rgba(77,140,255,.08),transparent)" }} />
+      <div style={{ position: "relative", maxWidth: 580 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 10, animation: "rise .5s .05s both" }}>
+          <span style={{ width: 52, height: 52, display: "grid", placeItems: "center", background: "var(--accent-bg)", border: "1px solid var(--accent-line)", borderRadius: 14 }}>
+            <Icon.grid size={22} color={blue} />
+          </span>
+          <span className="font-mono" style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".18em", color: "var(--muted)" }}>
+            NO MATCH FOUND
+          </span>
+        </div>
+        <div style={{ marginTop: 22, fontFamily: disp, fontWeight: 800, fontSize: 54, lineHeight: 1.02, letterSpacing: "-.02em", animation: "rise .6s .15s both" }}>
+          Nothing to compare yet.
+        </div>
+        <p style={{ margin: "18px 0 0", fontSize: 16, lineHeight: 1.6, color: "var(--muted)", animation: "rise .6s .25s both" }}>
+          Metanoia couldn&apos;t find a match for that under your constraints. The marketplace currently covers{" "}
+          <b style={{ color: "var(--ink)" }}>market data, news, vector search, geocoding, GPU compute, and transcription</b>.
+          Your budget wasn&apos;t the blocker — there was simply nothing to shop.
+        </p>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 10, marginTop: 26, background: "var(--accent-bg)", border: "1px solid var(--accent-line)", borderRadius: 10, padding: "12px 18px", animation: "rise .6s .35s both" }}>
+          <Icon.lock size={14} />
+          <span className="font-mono" style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: ".1em", color: blue }}>
+            NO CHARGE. CARD NEVER TOUCHED.
+          </span>
+        </div>
+        <div style={{ marginTop: 28, animation: "rise .6s .45s both" }}>
+          <button onClick={onReset} className="font-body" style={{ fontSize: 13, fontWeight: 600, color: "#fff", background: "linear-gradient(180deg,#3d7bff,#2b6bf3)", border: "none", borderRadius: 10, padding: "12px 22px", boxShadow: "0 8px 22px rgba(43,107,243,.35)", cursor: "pointer" }}>
+            Try another request
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Refused({ result, onReset }: { result: Result; onReset: () => void }) {
   const b = result.blocked;
   const plan = b?.plan;
   const checks = b?.verdict.checks ?? result.decision.verdict?.checks ?? [];
   const failCount = checks.filter((c) => !c.passed).length;
   const reason = result.proposal?.reasoning ?? result.decision.note ?? "It exceeds your mandate.";
+
+  // A real mandate denial is defined by a FAILING SpendGuard check — not merely by
+  // "blocked" being set (the closest plan can pass the mandate yet still not be a real
+  // match). No failing check => the agent found nothing to shop, which is an honest
+  // empty state, NOT a refusal, and must not wear the red "Denied" screen.
+  const isMandateDenial = checks.some((c) => !c.passed);
+  if (!isMandateDenial) return <NoMatch onReset={onReset} />;
 
   return (
     <div className="mn-refused-grid" style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 60, padding: "56px 64px", alignItems: "center", position: "relative", overflow: "hidden" }}>

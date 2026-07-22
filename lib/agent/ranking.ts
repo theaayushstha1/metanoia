@@ -1,6 +1,10 @@
 import { CATALOG, type Capability, type Plan } from "@/lib/catalog";
-import { getIntentMandate, getSubscriptions } from "@/lib/store";
-import { evaluateAgainstConstitution, type ConstitutionVerdict } from "@/lib/agent/spendCap";
+import { getIntentMandate } from "@/lib/store";
+import {
+  evaluateAgainstConstitution,
+  type ConstitutionVerdict,
+  type ExistingSubscription,
+} from "@/lib/agent/spendCap";
 
 export type RankingPriority = "cost" | "balanced" | "reliability" | "throughput";
 
@@ -48,7 +52,7 @@ function requiredFeatures(r: NormalizedRequirements): string[] {
   );
 }
 
-function mandateFor(plan: Plan, customerId: string): ConstitutionVerdict {
+function mandateFor(plan: Plan, existing: ExistingSubscription[]): ConstitutionVerdict {
   return evaluateAgainstConstitution({
     intent: getIntentMandate(),
     item: {
@@ -58,18 +62,20 @@ function mandateFor(plan: Plan, customerId: string): ConstitutionVerdict {
       category: plan.category,
       amount_cents: plan.priceCents,
     },
-    existing: getSubscriptions(customerId),
+    existing,
   });
 }
 
 /**
  * Deterministic ranking layer. The model extracts requirements; this function
  * applies the published math to server-owned catalog data and mandate state.
+ * Existing subscriptions are injected (fetched once at the async boundary) so this
+ * stays a pure, synchronous function of its inputs.
  */
 export function rankPlans(
   capability: Capability,
   requirements: NormalizedRequirements,
-  customerId: string
+  existing: ExistingSubscription[]
 ): RankedPlan[] {
   const required = requiredFeatures(requirements);
   const priority = requirements.priority ?? "balanced";
@@ -98,7 +104,7 @@ export function rankPlans(
         if (!plan.features.includes(feature)) hardFailures.push(`missing ${feature.replace(/_/g, " ")}`);
       }
 
-      const verdict = mandateFor(plan, customerId);
+      const verdict = mandateFor(plan, existing);
       const featureCoverage = required.length
         ? required.filter((feature) => plan.features.includes(feature)).length / required.length
         : clamp(plan.features.length / 4);

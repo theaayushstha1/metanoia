@@ -102,6 +102,7 @@ export async function createPaymentIntent(params: {
   currency?: string;
   customerId: string;
   description?: string;
+  metadata?: Record<string, string>;
   saveForFutureUse?: boolean;
   returnUrl: string;
   /** A stable id makes re-initiating the same checkout attempt idempotent. */
@@ -113,6 +114,7 @@ export async function createPaymentIntent(params: {
     currency,
     customer_id: params.customerId,
     description: params.description,
+    ...(params.metadata ? { metadata: params.metadata } : {}),
     return_url: params.returnUrl,
     // confirm:false -> the browser SDK confirms with the collected card.
     confirm: false,
@@ -123,10 +125,15 @@ export async function createPaymentIntent(params: {
 
   if (params.saveForFutureUse) {
     body.setup_future_usage = "off_session";
-    // Subscriptions must land on a mandate-capable connector (Stripe). One-time
-    // payments can use default routing across the other connectors.
-    const mca = process.env.HYPERSWITCH_MANDATE_CONNECTOR_MCA;
-    const conn = process.env.HYPERSWITCH_MANDATE_CONNECTOR ?? "stripe";
+    // A sandbox demo may use a payment-only connector such as Fauxpay while the
+    // mandate connector remains Stripe for real saved-card renewals.
+    const mca =
+      process.env.HYPERSWITCH_CHECKOUT_CONNECTOR_MCA ??
+      process.env.HYPERSWITCH_MANDATE_CONNECTOR_MCA;
+    const conn =
+      process.env.HYPERSWITCH_CHECKOUT_CONNECTOR ??
+      process.env.HYPERSWITCH_MANDATE_CONNECTOR ??
+      "stripe";
     if (mca) {
       body.routing = { type: "single", data: { connector: conn, merchant_connector_id: mca } };
     }
@@ -165,6 +172,7 @@ export async function chargeSavedMethod(params: {
   paymentMethodId: string;
   paymentId?: string;
   description?: string;
+  metadata?: Record<string, string>;
 }): Promise<PaymentResponse> {
   const mca = process.env.HYPERSWITCH_MANDATE_CONNECTOR_MCA;
   const conn = process.env.HYPERSWITCH_MANDATE_CONNECTOR ?? "stripe";
@@ -182,6 +190,7 @@ export async function chargeSavedMethod(params: {
     ...(mca ? { routing: { type: "single", data: { connector: conn, merchant_connector_id: mca } } } : {}),
     ...(params.paymentId ? { payment_id: params.paymentId } : {}),
     ...(params.description ? { description: params.description } : {}),
+    ...(params.metadata ? { metadata: params.metadata } : {}),
     ...(PROFILE_ID ? { profile_id: PROFILE_ID } : {}),
   };
   return hsFetch<PaymentResponse>("/payments", body);
