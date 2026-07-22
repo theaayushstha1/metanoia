@@ -47,7 +47,7 @@ export default function CheckoutForm({
     <form onSubmit={handleSubmit}>
       <UnifiedCheckout
         id="unified-checkout"
-        options={{ wallets: { applePay: "never", googlePay: "never" } }}
+        options={{ wallets: { walletReturnUrl: returnUrl, applePay: "never", googlePay: "never" } }}
       />
       <button
         type="submit"
