@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 
 /* ── Logo ─────────────────────────────────────────────────────────────── */
 export function Logo({ size = 26 }: { size?: number }) {
@@ -218,13 +219,19 @@ export function TopBar({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-        <Logo size={26} />
-        <span
-          className="font-display"
-          style={{ fontWeight: 700, fontSize: 17, letterSpacing: "-.01em" }}
+        <Link
+          href="/"
+          aria-label="Metanoia home"
+          style={{ display: "flex", alignItems: "center", gap: 11, textDecoration: "none", color: "inherit" }}
         >
-          Metanoia
-        </span>
+          <Logo size={26} />
+          <span
+            className="font-display"
+            style={{ fontWeight: 700, fontSize: 17, letterSpacing: "-.01em" }}
+          >
+            Metanoia
+          </span>
+        </Link>
         <span
           className="font-mono"
           style={{
