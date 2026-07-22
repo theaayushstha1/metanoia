@@ -1,25 +1,34 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useHyper, useWidgets, UnifiedCheckout } from "@juspay-tech/react-hyper-js";
 
 /**
  * The card-collection form. Card data is rendered inside Hyperswitch's secure
  * iframe (UnifiedCheckout) and never touches our server.
  *
- * Note: Hyperswitch's confirmPayment takes `widgets` (not Stripe's `elements`).
+ * On inline success (no 3DS redirect) we navigate to the receipt ourselves; if
+ * 3DS is required the SDK redirects to `returnUrl` (the same receipt page).
  */
 export default function CheckoutForm({
   returnUrl,
   amountLabel,
+  paymentId,
 }: {
   returnUrl: string;
   amountLabel?: string;
+  paymentId?: string;
 }) {
+  const router = useRouter();
   const hyper = useHyper();
   const widgets = useWidgets();
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
+
+  function toReceipt(id?: string) {
+    router.push(`/checkout/complete?payment_id=${encodeURIComponent(id ?? paymentId ?? "")}`);
+  }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -33,8 +42,10 @@ export default function CheckoutForm({
       redirect: "if_required",
     });
 
+    const rid = (response as { payment_id?: string })?.payment_id;
     if (response?.status === "succeeded") {
-      setMessage("Payment successful. Mandate active — the agent can renew this off-session.");
+      toReceipt(rid);
+      return; // navigating away
     } else if (response?.error) {
       setMessage(response.error.message ?? "Payment failed.");
     } else if (response) {

@@ -24,6 +24,7 @@ export default function CheckoutClient({
   amountLabel?: string;
 }) {
   const [options, setOptions] = useState<Record<string, unknown>>({});
+  const [paymentId, setPaymentId] = useState<string>();
   const [error, setError] = useState<string>(
     KEY_READY ? "" : "Add your Hyperswitch publishable key to .env.local and restart the dev server."
   );
@@ -41,11 +42,13 @@ export default function CheckoutClient({
         if (cancelled) return;
         if (data.refused) setError(`Refused by the mandate: ${data.verdict?.summary ?? ""}`);
         else if (data.error) setError(data.error);
-        else
+        else {
+          setPaymentId(data.paymentId);
           setOptions({
             clientSecret: data.clientSecret,
             appearance: { theme: "default", variables: { colorPrimary: "#2b6bf3" } },
           });
+        }
       })
       .catch((e) => {
         if (!cancelled) setError(String(e));
@@ -83,7 +86,7 @@ export default function CheckoutClient({
 
   return (
     <HyperElements options={options} hyper={hyperPromise}>
-      <CheckoutForm returnUrl={`${APP_URL}/checkout/complete`} amountLabel={amountLabel} />
+      <CheckoutForm returnUrl={`${APP_URL}/checkout/complete`} amountLabel={amountLabel} paymentId={paymentId} />
     </HyperElements>
   );
 }
