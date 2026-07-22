@@ -1,17 +1,23 @@
 {
-  "name": "warrant",
+  "name": "metanoia",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@ai-sdk/google-vertex": "^5.0.25",
+    "@juspay-tech/hyper-js": "^2.1.0",
+    "@juspay-tech/react-hyper-js": "^2.3.0",
+    "ai": "^7.0.34",
     "next": "16.2.11",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -21,6 +27,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.11",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.23.1",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }
