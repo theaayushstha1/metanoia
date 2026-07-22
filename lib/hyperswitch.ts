@@ -123,6 +123,13 @@ export async function createPaymentIntent(params: {
 
   if (params.saveForFutureUse) {
     body.setup_future_usage = "off_session";
+    // Subscriptions must land on a mandate-capable connector (Stripe). One-time
+    // payments can use default routing across the other connectors.
+    const mca = process.env.HYPERSWITCH_MANDATE_CONNECTOR_MCA;
+    const conn = process.env.HYPERSWITCH_MANDATE_CONNECTOR ?? "stripe";
+    if (mca) {
+      body.routing = { type: "single", data: { connector: conn, merchant_connector_id: mca } };
+    }
   }
 
   try {

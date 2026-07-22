@@ -88,10 +88,10 @@ export function getSubscriptions(customerId: string): ExistingSubscription[] {
 
 function addSubscription(customerId: string, sub: ExistingSubscription): void {
   const list = state.subscriptions[customerId] ?? [];
-  if (!list.some((s) => s.plan_id === sub.plan_id)) {
-    list.push(sub);
-    state.subscriptions[customerId] = list;
-  }
+  const idx = list.findIndex((s) => s.plan_id === sub.plan_id);
+  if (idx >= 0) list[idx] = sub; // upsert: a renewal at a new price updates the amount
+  else list.push(sub);
+  state.subscriptions[customerId] = list;
 }
 
 /** Record a pending checkout attempt. Idempotent by paymentId. */
@@ -134,7 +134,7 @@ export function markPaymentSucceeded(
         plan_id: plan.id,
         merchant_name: plan.vendor,
         category: plan.category,
-        amount_cents: plan.priceCents,
+        amount_cents: attempt.amountCents, // the amount actually authorized, not a later catalog price
       });
       issueCredential(attempt.customerId, plan.id); // the capability is now usable
     }
