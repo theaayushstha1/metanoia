@@ -61,7 +61,7 @@ export default function CheckoutClient({
     return () => {
       cancelled = true;
     };
-  }, [planId]);
+  }, [planId, router]);
 
   if (error) {
     return (
