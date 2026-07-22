@@ -440,7 +440,7 @@ function Home({
   return (
     <main className="mn-workbench-home">
       {/* hero */}
-      <div className="mn-hero" style={{ padding: "28px 56px 18px", textAlign: "center", position: "relative" }}>
+      <div className="mn-hero" style={{ padding: "14px 56px 10px", textAlign: "center", position: "relative" }}>
         <div
           className="font-mono"
           style={{
@@ -463,11 +463,11 @@ function Home({
         <h1
           className="mn-hero-title"
           style={{
-            margin: "14px auto 0",
+            margin: "8px auto 0",
             maxWidth: 940,
             fontFamily: disp,
             fontWeight: 800,
-            fontSize: 52,
+            fontSize: 44,
             lineHeight: 1,
             letterSpacing: 0,
             textWrap: "balance",
@@ -485,6 +485,11 @@ function Home({
       </div>
 
       <div className="mn-page-pad" style={{ padding: "18px 56px 24px", animation: "rise .7s .35s both" }}>
+        <div className="mn-support-grid">
+          <ContextPanel context={context} setContext={setContext} />
+          <MemoryPanel />
+        </div>
+
         <div className="mn-command-stage">
             <section
               className="mn-command-panel"
@@ -576,11 +581,6 @@ function Home({
                 {error}
               </div>
             )}
-        </div>
-
-        <div className="mn-support-grid">
-          <ContextPanel context={context} setContext={setContext} />
-          <MemoryPanel />
         </div>
       </div>
     </main>
@@ -811,24 +811,6 @@ function MandateTuner({
             USER-AUTHORIZED · SERVER ENFORCED
           </div>
         </div>
-        <div className="mn-mandate-presets" role="group" aria-label="Mandate presets">
-          {presets.map((preset) => {
-            const active =
-              mandate.monthly === preset.monthly &&
-              mandate.perCharge === preset.perCharge &&
-              mandate.maxSubs === preset.maxSubs;
-            return (
-              <button
-                key={preset.label}
-                type="button"
-                className={active ? "is-active" : undefined}
-                onClick={() => set(preset)}
-              >
-                {preset.label}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       <div className="mn-mandate-control-grid">
@@ -849,10 +831,11 @@ function MandateTuner({
           onChange={(perCharge) => set({ perCharge })}
         />
         <div className="mn-service-stepper">
-          <div className="font-mono" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".1em", color: "var(--muted)" }}>
-            SERVICE SLOTS
+          <div className="mn-range-label font-mono">
+            <span>SERVICE SLOTS</span>
+            <output aria-live="polite">{mandate.maxSubs}</output>
           </div>
-          <div className="mn-stepper-row">
+          <div className="mn-service-control-row">
             <button
               type="button"
               aria-label="Decrease service limit"
@@ -862,7 +845,15 @@ function MandateTuner({
             >
               −
             </button>
-            <output className="font-mono" aria-live="polite">{mandate.maxSubs}</output>
+            <div className="mn-slot-track" aria-hidden="true">
+              {Array.from({ length: 10 }).map((_, index) => (
+                <span
+                  key={index}
+                  className={index < mandate.maxSubs ? "is-available" : undefined}
+                  data-filled={index < mandate.active ? "true" : undefined}
+                />
+              ))}
+            </div>
             <button
               type="button"
               aria-label="Increase service limit"
@@ -873,18 +864,32 @@ function MandateTuner({
               +
             </button>
           </div>
-          <div className="mn-slot-track" aria-hidden="true">
-            {Array.from({ length: 10 }).map((_, index) => (
-              <span
-                key={index}
-                className={index < mandate.maxSubs ? "is-available" : undefined}
-                data-filled={index < mandate.active ? "true" : undefined}
-              />
-            ))}
-          </div>
-          <div className="font-mono" style={{ marginTop: 7, fontSize: 9, color: "var(--faint)" }}>
-            {mandate.active} ACTIVE · {Math.max(0, mandate.maxSubs - mandate.active)} OPEN
-          </div>
+          <span className="mn-range-scale font-mono">
+            <span>{mandate.active} ACTIVE</span>
+            <span>{Math.max(0, mandate.maxSubs - mandate.active)} OPEN</span>
+          </span>
+        </div>
+      </div>
+
+      <div className="mn-mandate-profile-row">
+        <span className="font-mono">SPENDING PROFILE</span>
+        <div className="mn-mandate-presets" role="group" aria-label="Mandate presets">
+          {presets.map((preset) => {
+            const active =
+              mandate.monthly === preset.monthly &&
+              mandate.perCharge === preset.perCharge &&
+              mandate.maxSubs === preset.maxSubs;
+            return (
+              <button
+                key={preset.label}
+                type="button"
+                className={active ? "is-active" : undefined}
+                onClick={() => set(preset)}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 

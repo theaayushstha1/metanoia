@@ -23,10 +23,10 @@
 </p>
 
 <p align="center">
-  <a href="#-quickstart">Quickstart</a> ·
-  <a href="#-how-it-works">How it works</a> ·
-  <a href="#%EF%B8%8F-the-two-things-that-make-it-safe">Safety</a> ·
-  <a href="#%EF%B8%8F-screens">Screens</a> ·
+  <a href="#quickstart">Quickstart</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#the-two-things-that-make-it-safe">Safety</a> ·
+  <a href="#screens">Screens</a> ·
   <a href="docs/ARCHITECTURE.md">ARCHITECTURE.md</a> ·
   <a href="docs/DECISIONS.md">DECISIONS.md</a> ·
   <a href="docs/METANOIA-WALKTHROUGH.pdf">Full walkthrough (PDF)</a>
@@ -50,7 +50,7 @@ You give the agent a **capability you need** and a **spending mandate** (default
 
 ---
 
-## 🧭 How it works
+## How it works
 
 ```mermaid
 flowchart LR
@@ -91,7 +91,7 @@ flowchart LR
 
 ---
 
-## ⚖️ The two things that make it safe
+## The two things that make it safe
 
 ### 1) Deterministic ranking (the model does not score)
 
@@ -128,7 +128,7 @@ Every autonomous purchase is checked **in order, before any money moves**, and t
 
 ---
 
-## 🔭 The four parallel scouts
+## The four parallel scouts
 
 Four independent analyst agents review the same shortlist at once. They **advise**; they never decide or pay.
 
@@ -143,7 +143,7 @@ The Market scout names real products as **research-only** (clearly labeled "NOT 
 
 ---
 
-## 💳 Payment sequence (Hyperswitch)
+## Payment sequence (Hyperswitch)
 
 ```mermaid
 sequenceDiagram
@@ -174,7 +174,7 @@ sequenceDiagram
 
 ---
 
-## 🗂️ Data model — payments and memory are walled off
+## Data model — payments and memory are walled off
 
 ```mermaid
 erDiagram
@@ -227,7 +227,7 @@ Payment tables live in `public.*`; preference memory lives in a **separate `memo
 
 ---
 
-## 🖼️ Screens
+## Screens
 
 | Workbench (mandate + context) | Procuring (four scouts, live) |
 |---|---|
@@ -251,20 +251,20 @@ On success the receipt makes a **real credentialed call** to the purchased capab
 
 ---
 
-## ✨ Feature highlights
+## Feature highlights
 
-- 🧠 **Agentic procurement** — Gemini 3.1 Pro on Vertex proposes; a deterministic core decides.
-- ⚖️ **SpendGuard** — mandate enforced before any charge; refusals are explainable.
-- 🔭 **Four advisory scouts** — price / value / quality / grounded market signal, in parallel.
-- 💳 **Real payment rails** — Juspay Hyperswitch (sandbox), idempotent, webhook-ready.
-- 🔐 **Buy-then-use loop** — a scoped credential + a live authenticated capability proof.
-- 🧩 **Opt-in preference memory** — consent-gated, deletable, walled off from payments.
-- 🎛️ **Configurable mandate** — caps are editable in the workbench.
-- 🧪 **44/44 tests** — the safety gate, ranking math, and idempotency are covered.
+- **Agentic procurement** — Gemini 3.1 Pro on Vertex proposes; a deterministic core decides.
+- **SpendGuard** — mandate enforced before any charge; refusals are explainable.
+- **Four advisory scouts** — price / value / quality / grounded market signal, in parallel.
+- **Real payment rails** — Juspay Hyperswitch (sandbox), idempotent, webhook-ready.
+- **Buy-then-use loop** — a scoped credential + a live authenticated capability proof.
+- **Opt-in preference memory** — consent-gated, deletable, walled off from payments.
+- **Configurable mandate** — caps are editable in the workbench.
+- **44/44 tests** — the safety gate, ranking math, and idempotency are covered.
 
 ---
 
-## 🧱 Tech stack
+## Tech stack
 
 | Layer | Tech |
 |---|---|
@@ -277,7 +277,7 @@ On success the receipt makes a **real credentialed call** to the purchased capab
 
 ---
 
-## 🚀 Quickstart
+## Quickstart
 
 ```bash
 git clone https://github.com/theaayushstha1/metanoia.git
@@ -286,8 +286,8 @@ npm install
 
 # configure secrets (never committed) — see .env.local.example
 cp .env.local.example .env.local
-#   HYPERSWITCH_SECRET_KEY, NEXT_PUBLIC_HYPERSWITCH_PUBLISHABLE_KEY
-#   GOOGLE_VERTEX_PROJECT  (+ `gcloud auth application-default login` for local dev)
+# HYPERSWITCH_SECRET_KEY, NEXT_PUBLIC_HYPERSWITCH_PUBLISHABLE_KEY
+# GOOGLE_VERTEX_PROJECT  (+ `gcloud auth application-default login` for local dev)
 
 npm run dev        # http://localhost:3000
 npm test           # 44/44
@@ -299,7 +299,7 @@ Test card at checkout: `4242 4242 4242 4242`, any future expiry, any CVC.
 
 ---
 
-## 🧪 Testing
+## Testing
 
 `npm test` → **44/44 across 10 files** (plus `tsc` clean, `lint` clean). The suites prove the parts that must never break:
 
@@ -311,7 +311,7 @@ Test card at checkout: `4242 4242 4242 4242`, any future expiry, any CVC.
 
 ---
 
-## 🧭 Honest boundaries (what's real vs sandbox)
+## Honest boundaries (what's real vs sandbox)
 
 - The provider endpoints (`/api/provider/*`) are an **authenticated internal sandbox mock**, not external vendor APIs. A `200` proves *our* credential works against *our* protected endpoint (labeled "AUTHENTICATED SANDBOX PROVIDER · 200 · SANDBOX LIVE").
 - Catalog vendors are **fictional sandbox offers**. Real brands appear only via the Market scout as `external_research`, never as purchasable.
@@ -321,7 +321,7 @@ Test card at checkout: `4242 4242 4242 4242`, any future expiry, any CVC.
 
 ---
 
-## 🗺️ Roadmap
+## Roadmap
 
 - **P0 — deploy the durable path:** provision Cloud SQL, run migrations, deploy publicly, observe one **signed** webhook.
 - **P1 — real recurring:** Stripe MIT off-session charge; decline-code-aware smart retries (Revenue Recovery).
@@ -329,7 +329,7 @@ Test card at checkout: `4242 4242 4242 4242`, any future expiry, any CVC.
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 | Doc | What's in it |
 |---|---|
