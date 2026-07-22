@@ -15,6 +15,20 @@ interface Candidate {
   websockets: boolean;
   max_rps: number | null;
   uptime_pct: number | null;
+  capability: string;
+  features: string[];
+  description: string;
+  best_for: string;
+  score: number;
+  score_parts: {
+    capabilityFit: number;
+    priceEfficiency: number;
+    reliability: number;
+    throughput: number;
+  };
+  eligible: boolean;
+  hard_failures: string[];
+  tradeoff: string;
 }
 interface Check {
   rule: string;
@@ -34,11 +48,20 @@ interface Decision {
   projected_monthly_cents?: number;
   remaining_monthly_cents?: number;
   confirmation_required: boolean;
+  score?: number;
   note?: string;
 }
 interface Proposal {
   reasoning: string;
   rejected: { plan_id: string; reason: string }[];
+  normalized_requirements: {
+    max_price_cents?: number | null;
+    min_rps?: number | null;
+    needs_realtime?: boolean;
+    needs_websockets?: boolean;
+    required_features?: string[];
+    priority?: string;
+  };
 }
 interface Blocked {
   plan: Candidate;
@@ -50,15 +73,27 @@ interface Result {
   trace: { tool?: string; input?: unknown; output?: unknown }[];
   candidates: Candidate[];
   blocked: Blocked | null;
+  context: {
+    profileSummary?: string;
+    projectSummary?: string;
+    socialLinks: string[];
+    repositories: { fullName: string; language?: string; imported: boolean; error?: string }[];
+  };
 }
 
-type Mandate = { monthly: number; perCharge: number; maxSubs: number };
+type Mandate = { monthly: number; perCharge: number; maxSubs: number; spent: number; active: number };
+type ContextDraft = {
+  profileSummary: string;
+  projectSummary: string;
+  githubRepos: string;
+  socialLinks: string;
+};
 
 const PRESETS: Record<string, string> = {
   "market-data":
     "Find the best market-data API: real-time US equities, websockets, ≥60 req/s, under $50/month.",
   news: "I need a news API with LLM summaries, under $20/month.",
-  "over-budget": "Get me a GPU compute API for model training.",
+  "over-budget": "Get me an A100 GPU compute API for large-model training. A100 is a hard requirement.",
 };
 
 const RULE_LABEL: Record<string, string> = {
@@ -72,6 +107,11 @@ const RULE_LABEL: Record<string, string> = {
 
 const blue = "var(--blue)";
 const disp = "var(--font-bricolage), sans-serif";
+const splitLines = (value: string) =>
+  value
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 
 export default function Workbench({ mandate }: { mandate: Mandate }) {
   const router = useRouter();
@@ -79,6 +119,12 @@ export default function Workbench({ mandate }: { mandate: Mandate }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
+  const [context, setContext] = useState<ContextDraft>({
+    profileSummary: "Product-minded developer building with TypeScript and AI APIs.",
+    projectSummary: "A financial research product that needs dependable real-time data without enterprise-scale spend.",
+    githubRepos: "",
+    socialLinks: "",
+  });
 
   async function runWith(text: string) {
     setLoading(true);
@@ -88,7 +134,15 @@ export default function Workbench({ mandate }: { mandate: Mandate }) {
       const r = await fetch("/api/agent/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ request: text }),
+        body: JSON.stringify({
+          request: text,
+          context: {
+            profileSummary: context.profileSummary || undefined,
+            projectSummary: context.projectSummary || undefined,
+            githubRepos: splitLines(context.githubRepos),
+            socialLinks: splitLines(context.socialLinks),
+          },
+        }),
       });
       const data = await r.json();
       if (!r.ok) setError(data.error ?? "Agent error");
@@ -144,6 +198,8 @@ export default function Workbench({ mandate }: { mandate: Mandate }) {
           run={run}
           loading={loading}
           error={error}
+          context={context}
+          setContext={setContext}
         />
       )}
       {!loading && result && approved && (
@@ -163,7 +219,7 @@ export default function Workbench({ mandate }: { mandate: Mandate }) {
 function Processing() {
   const steps = [
     { t: "Reading your request", d: "extracting hard requirements" },
-    { t: "Scanning the marketplace", d: "7 onboarded vendors" },
+    { t: "Scanning the marketplace", d: "15 curated offers" },
     { t: "Comparing offers", d: "price · throughput · reliability" },
     { t: "Checking your mandate", d: "SpendGuard, in order" },
     { t: "Finalizing the pick", d: "assembling the proposal" },
@@ -323,6 +379,8 @@ function Home({
   run,
   loading,
   error,
+  context,
+  setContext,
 }: {
   mandate: Mandate;
   request: string;
@@ -330,11 +388,13 @@ function Home({
   run: () => void;
   loading: boolean;
   error: string;
+  context: ContextDraft;
+  setContext: (context: ContextDraft) => void;
 }) {
   return (
     <>
       {/* hero */}
-      <div style={{ padding: "64px 64px 34px", textAlign: "center", position: "relative", overflow: "hidden" }}>
+      <div className="mn-hero" style={{ padding: "64px 64px 34px", textAlign: "center", position: "relative", overflow: "hidden" }}>
         <div
           style={{
             position: "absolute",
@@ -363,6 +423,7 @@ function Home({
           <Icon.shieldCheck size={12} /> AGENT WITH A MANDATE
         </div>
         <h1
+          className="mn-hero-title"
           style={{
             position: "relative",
             margin: "24px auto 0",
@@ -394,8 +455,9 @@ function Home({
       </div>
 
       {/* mandate cards */}
-      <div style={{ padding: "0 64px", animation: "rise .7s .3s both" }}>
+      <div className="mn-page-pad" style={{ padding: "0 64px", animation: "rise .7s .3s both" }}>
         <div
+          className="mn-mandate-grid"
           style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr 1fr",
@@ -404,19 +466,27 @@ function Home({
             margin: "0 auto",
           }}
         >
-          <MandateCard label="MONTHLY CAP" value={usd(mandate.monthly)} foot="SPENT $0.00" meter={0} />
+          <MandateCard
+            label="MONTHLY CAP"
+            value={usd(mandate.monthly)}
+            foot={`SPENT ${usd(mandate.spent)}`}
+            meter={Math.min(100, (mandate.spent / mandate.monthly) * 100)}
+          />
           <MandateCard label="PER-CHARGE CAP" value={usd(mandate.perCharge)} foot="HARD LIMIT" />
           <MandateCard
             label="MAX SUBS"
             value={String(mandate.maxSubs)}
-            foot="0 ACTIVE"
+            foot={`${mandate.active} ACTIVE`}
             slots={mandate.maxSubs}
+            filledSlots={mandate.active}
           />
         </div>
       </div>
 
+      <ContextPanel context={context} setContext={setContext} />
+
       {/* command input */}
-      <div style={{ padding: "26px 64px 40px", animation: "rise .7s .4s both" }}>
+      <div className="mn-page-pad" style={{ padding: "26px 64px 40px", animation: "rise .7s .4s both" }}>
         <div
           style={{
             maxWidth: 900,
@@ -451,6 +521,7 @@ function Home({
             />
           </div>
           <div
+            className="mn-command-footer"
             style={{
               display: "flex",
               alignItems: "center",
@@ -460,7 +531,7 @@ function Home({
               background: "var(--panel)",
             }}
           >
-            <div style={{ display: "flex", gap: 8 }}>
+            <div className="mn-preset-row" style={{ display: "flex", gap: 8 }}>
               <PresetChip active label="market-data" onClick={() => setRequest(PRESETS["market-data"])}>
                 <Icon.candles size={12} color={blue} />
               </PresetChip>
@@ -528,7 +599,7 @@ function Home({
           }}
         >
           <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <Icon.nodes size={11} /> 7 VENDORS
+            <Icon.nodes size={11} /> 15 OFFERS
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <Icon.shield size={11} color="var(--faint)" /> EVERY CHARGE CHECKED
@@ -542,18 +613,93 @@ function Home({
   );
 }
 
+function ContextPanel({
+  context,
+  setContext,
+}: {
+  context: ContextDraft;
+  setContext: (context: ContextDraft) => void;
+}) {
+  const field = (key: keyof ContextDraft, value: string) => setContext({ ...context, [key]: value });
+  return (
+    <section className="mn-page-pad" style={{ padding: "8px 64px 0", animation: "rise .7s .35s both" }}>
+      <div style={{ maxWidth: 900, margin: "0 auto", borderTop: "1px solid var(--line-2)", borderBottom: "1px solid var(--line-2)", padding: "22px 0" }}>
+        <div className="mn-context-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 14 }}>
+          <div>
+            <div className="font-mono" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 10.5, fontWeight: 700, letterSpacing: ".14em" }}>
+              <Icon.nodes size={13} color={blue} /> PROJECT CONTEXT
+            </div>
+            <p style={{ margin: "6px 0 0", fontSize: 12.5, color: "var(--muted)" }}>
+              Consent-based context used to tune fit, cost, reliability, and throughput.
+            </p>
+          </div>
+          <span className="font-mono" style={{ fontSize: 9.5, color: "var(--green)", background: "var(--green-bg)", borderRadius: 99, padding: "5px 10px" }}>
+            OPTIONAL · PUBLIC DATA ONLY
+          </span>
+        </div>
+        <div className="mn-context-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <ContextField label="YOUR BACKGROUND" hint="role, experience, preferences">
+            <textarea
+              value={context.profileSummary}
+              onChange={(event) => field("profileSummary", event.target.value)}
+              rows={3}
+              placeholder="Product engineer, comfortable with TypeScript, prefers managed services..."
+            />
+          </ContextField>
+          <ContextField label="CURRENT PROJECT" hint="product, users, technical constraints">
+            <textarea
+              value={context.projectSummary}
+              onChange={(event) => field("projectSummary", event.target.value)}
+              rows={3}
+              placeholder="A research dashboard serving live market data to 500 users..."
+            />
+          </ContextField>
+          <ContextField label="GITHUB REPOSITORIES" hint="up to 5 public repository URLs">
+            <input
+              value={context.githubRepos}
+              onChange={(event) => field("githubRepos", event.target.value)}
+              placeholder="https://github.com/owner/repository"
+            />
+          </ContextField>
+          <ContextField label="PROFILE LINKS" hint="LinkedIn, X, portfolio; reference only">
+            <input
+              value={context.socialLinks}
+              onChange={(event) => field("socialLinks", event.target.value)}
+              placeholder="https://linkedin.com/in/..."
+            />
+          </ContextField>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ContextField({ label, hint, children }: { label: string; hint: string; children: React.ReactNode }) {
+  return (
+    <label className="mn-context-field" style={{ display: "grid", gap: 7 }}>
+      <span className="font-mono" style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 9.5, fontWeight: 600, letterSpacing: ".1em", color: "var(--ink-2)" }}>
+        {label}
+        <span style={{ color: "var(--faint)", fontWeight: 400, letterSpacing: 0, textTransform: "none" }}>{hint}</span>
+      </span>
+      {children}
+    </label>
+  );
+}
+
 function MandateCard({
   label,
   value,
   foot,
   meter,
   slots,
+  filledSlots = 0,
 }: {
   label: string;
   value: string;
   foot: string;
   meter?: number;
   slots?: number;
+  filledSlots?: number;
 }) {
   return (
     <div
@@ -585,7 +731,16 @@ function MandateCard({
         {slots != null && (
           <span style={{ display: "flex", gap: 5 }}>
             {Array.from({ length: slots }).map((_, i) => (
-              <span key={i} style={{ width: 18, height: 18, border: "1.5px dashed #b9c8e6", borderRadius: 5 }} />
+              <span
+                key={i}
+                style={{
+                  width: 18,
+                  height: 18,
+                  border: `1.5px ${i < filledSlots ? "solid" : "dashed"} ${i < filledSlots ? blue : "#b9c8e6"}`,
+                  background: i < filledSlots ? "var(--accent-bg)" : "transparent",
+                  borderRadius: 5,
+                }}
+              />
             ))}
           </span>
         )}
@@ -655,11 +810,13 @@ function AgentResult({
   const projected = d.projected_monthly_cents ?? 0;
   const pct = Math.min(100, (projected / mandate.monthly) * 100);
   const capMark = Math.min(100, (mandate.perCharge / mandate.monthly) * 100);
+  const importedRepos = result.context.repositories.filter((repo) => repo.imported).length;
+  const requirements = requirementSummary(result.proposal);
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "390px 1fr", minHeight: 620 }}>
+    <div className="mn-result-layout" style={{ display: "grid", gridTemplateColumns: "390px 1fr", minHeight: 620 }}>
       {/* trace rail */}
-      <div style={{ borderRight: "1px solid var(--line-2)", background: "var(--panel)", padding: 26, display: "flex", flexDirection: "column" }}>
+      <div className="mn-trace-rail" style={{ borderRight: "1px solid var(--line-2)", background: "var(--panel)", padding: 26, display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 20 }}>
           <Icon.sparkle size={14} />
           <span className="font-mono" style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".16em" }}>
@@ -668,12 +825,12 @@ function AgentResult({
         </div>
         <div style={{ display: "grid", position: "relative" }} className="font-mono">
           <div style={{ position: "absolute", left: 5, top: 14, bottom: 14, width: 2, background: "linear-gradient(var(--blue),var(--accent-line))" }} />
-          <TraceStep i={0} title="read your request" sub="realtime · websockets · ≥60 rps · ≤$50" />
-          <TraceStep i={1} title="searched marketplace" sub={`${result.candidates.length} providers found`} />
+          <TraceStep i={0} title="read your project context" sub={`${importedRepos} repositories imported · ${result.context.profileSummary ? "profile attached" : "request only"}`} />
+          <TraceStep i={1} title="normalized requirements" sub={requirements} />
           <TraceStep
             i={2}
-            title="compared plans"
-            sub={result.proposal?.rejected?.map((r) => `${r.plan_id} out`).join(" · ") || "ranked on price + fit"}
+            title="ranked three offers"
+            sub="fit + price + reliability + throughput"
           />
           <TraceStep i={3} title="checked your mandate" sub={`${d.plan?.name} · allowed`} subColor="var(--green)" />
           <TraceStep i={4} title="waiting for you" active />
@@ -689,16 +846,17 @@ function AgentResult({
       </div>
 
       {/* main */}
-      <div style={{ padding: "26px 30px 30px" }}>
+      <div className="mn-result-main" style={{ padding: "26px 30px 30px" }}>
         <div className="font-mono" style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".16em", color: "var(--muted)", marginBottom: 14 }}>
           {result.candidates.length} OFFERS COMPARED
         </div>
-        <div style={{ border: "1px solid var(--line-3)", borderRadius: 12, overflow: "hidden" }}>
+        <div className="mn-offers-scroll" style={{ border: "1px solid var(--line-3)", borderRadius: 12, overflow: "auto" }}>
           <div
             className="font-mono"
             style={{
               display: "grid",
-              gridTemplateColumns: "2.4fr .9fr .9fr .9fr .8fr .9fr 1fr",
+              gridTemplateColumns: "2.1fr .65fr .8fr .85fr .75fr 1.8fr .9fr",
+              minWidth: 920,
               padding: "11px 18px",
               background: "var(--panel)",
               borderBottom: "1px solid var(--line-2)",
@@ -709,23 +867,23 @@ function AgentResult({
             }}
           >
             <span>PROVIDER</span>
+            <span>FIT</span>
             <span>PRICE/MO</span>
-            <span>REALTIME</span>
-            <span>WEBSOCKET</span>
-            <span>MAX RPS</span>
+            <span>THROUGHPUT</span>
             <span>UPTIME</span>
-            <span />
+            <span>BEST FOR / TRADEOFF</span>
+            <span>ACTION</span>
           </div>
           {result.candidates.map((c) => (
-            <OfferRow key={c.id} c={c} selected={c.id === d.selected_plan_id} />
+            <OfferRow key={c.id} c={c} selected={c.id === d.selected_plan_id} onChoose={onConfirm} />
           ))}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 16, marginTop: 16 }}>
+        <div className="mn-result-cards" style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 16, marginTop: 16 }}>
           {/* the pick */}
           <div style={{ border: "1px solid var(--accent-line)", borderRadius: 12, background: "linear-gradient(180deg,#f4f8ff,#fff)", padding: "24px 26px" }}>
             <div className="font-mono" style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".16em", color: blue }}>
-              THE PICK
+              RECOMMENDED · SCORE {d.score ?? result.candidates[0]?.score}/100
             </div>
             <div style={{ marginTop: 10, fontFamily: disp, fontWeight: 800, fontSize: 28, letterSpacing: "-.02em" }}>
               {d.plan?.name}{" "}
@@ -734,7 +892,7 @@ function AgentResult({
               </span>
             </div>
             <p style={{ margin: "8px 0 0", fontSize: 13.5, lineHeight: 1.55, color: "var(--muted)" }}>
-              Cheapest plan that meets every requirement.
+              {result.proposal?.reasoning ?? "Highest deterministic score among plans that satisfy the request and mandate."}
             </p>
             <div style={{ marginTop: 20 }}>
               <div className="font-mono" style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 500, letterSpacing: ".08em", color: "var(--muted)", marginBottom: 8 }}>
@@ -857,19 +1015,27 @@ function TraceStep({
   );
 }
 
-function OfferRow({ c, selected }: { c: Candidate; selected: boolean }) {
+function OfferRow({
+  c,
+  selected,
+  onChoose,
+}: {
+  c: Candidate;
+  selected: boolean;
+  onChoose: (id: string) => void;
+}) {
   const monogram = c.vendor
     .split(/\s+/)
     .map((w) => w[0])
     .slice(0, 2)
     .join("")
     .toUpperCase();
-  const note = !c.websockets ? "NO WEBSOCKETS" : selected ? "" : "OVERKILL";
   return (
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "2.4fr .9fr .9fr .9fr .8fr .9fr 1fr",
+        gridTemplateColumns: "2.1fr .65fr .8fr .85fr .75fr 1.8fr .9fr",
+        minWidth: 920,
         alignItems: "center",
         padding: selected ? "17px 18px" : "14px 18px",
         borderBottom: "1px solid var(--line-2)",
@@ -905,30 +1071,57 @@ function OfferRow({ c, selected }: { c: Candidate; selected: boolean }) {
           </span>
         </span>
       </span>
+      <span className="font-mono" style={{ fontSize: 13, fontWeight: 700, color: c.eligible ? blue : "var(--red)" }}>
+        {c.score}
+      </span>
       <span className="font-mono" style={{ fontSize: selected ? 15 : 13, fontWeight: selected ? 700 : 600, color: selected ? blue : undefined }}>
         {c.price}
       </span>
-      <span>{c.real_time ? <Icon.check size={16} color={selected ? blue : "#7c8598"} sw={2.2} /> : <Icon.x size={14} />}</span>
-      <span>{c.websockets ? <Icon.check size={16} color={selected ? blue : "#7c8598"} sw={2.2} /> : <Icon.x size={14} />}</span>
       <span className="font-mono" style={{ fontSize: selected ? 13 : 12, fontWeight: selected ? 600 : 500, color: selected ? "var(--ink)" : undefined }}>
-        {c.max_rps ?? "—"}
+        {c.max_rps != null ? `${c.max_rps} req/s` : "—"}
       </span>
       <span className="font-mono" style={{ fontSize: selected ? 13 : 12, fontWeight: selected ? 600 : 500, color: selected ? "var(--ink)" : undefined }}>
         {c.uptime_pct ? `${c.uptime_pct}%` : "—"}
       </span>
+      <span style={{ fontSize: 11.5, lineHeight: 1.35, color: c.eligible ? "var(--muted)" : "var(--red)" }}>
+        {c.eligible ? c.best_for : c.hard_failures[0] ?? c.tradeoff}
+      </span>
       <span style={{ textAlign: "right" }}>
-        {selected ? (
+        {!c.eligible ? (
+          <span className="font-mono" style={{ fontSize: 9.5, fontWeight: 700, color: "var(--red)" }}>
+            BLOCKED
+          </span>
+        ) : selected ? (
           <span className="font-mono" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".1em", color: "#fff", background: blue, borderRadius: 99, padding: "5px 11px" }}>
-            SELECTED
+            BEST FIT
           </span>
         ) : (
-          <span className="font-mono" style={{ fontSize: 9.5, fontWeight: 500, color: "var(--faint)" }}>
-            {note}
-          </span>
+          <button
+            onClick={() => onChoose(c.id)}
+            className="font-mono"
+            style={{ border: "1px solid var(--accent-line)", background: "var(--accent-bg)", color: blue, borderRadius: 8, padding: "6px 10px", fontSize: 9.5, fontWeight: 700, cursor: "pointer" }}
+          >
+            CHOOSE
+          </button>
         )}
       </span>
     </div>
   );
+}
+
+function requirementSummary(proposal: Proposal | null): string {
+  if (!proposal) return "no structured requirements";
+  const req = proposal.normalized_requirements;
+  return [
+    req.priority ? `${req.priority} priority` : "balanced priority",
+    req.max_price_cents != null ? `≤${usd(req.max_price_cents)}` : null,
+    req.min_rps != null ? `≥${req.min_rps} req/s` : null,
+    req.needs_realtime ? "realtime" : null,
+    req.needs_websockets ? "websockets" : null,
+    ...(req.required_features ?? []).map((feature) => feature.replace(/_/g, " ")),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function AuditRow({ check, last }: { check: Check; last?: boolean }) {
@@ -990,7 +1183,7 @@ function Refused({ result, onReset }: { result: Result; onReset: () => void }) {
   const reason = result.proposal?.reasoning ?? result.decision.note ?? "It exceeds your mandate.";
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 60, padding: "56px 64px", alignItems: "center", position: "relative", overflow: "hidden" }}>
+    <div className="mn-refused-grid" style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 60, padding: "56px 64px", alignItems: "center", position: "relative", overflow: "hidden" }}>
       <div style={{ position: "absolute", inset: 0, background: "radial-gradient(600px 300px at 20% 0,rgba(224,82,82,.06),transparent)" }} />
       <div style={{ position: "relative" }}>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 10, animation: "rise .5s .05s both" }}>
@@ -1001,7 +1194,7 @@ function Refused({ result, onReset }: { result: Result; onReset: () => void }) {
             SPENDGUARD SAID NO
           </span>
         </div>
-        <div style={{ marginTop: 22, fontFamily: disp, fontWeight: 800, fontSize: 88, lineHeight: 0.95, letterSpacing: "-.03em", animation: "rise .6s .15s both" }}>
+        <div className="mn-denied-title" style={{ marginTop: 22, fontFamily: disp, fontWeight: 800, fontSize: 88, lineHeight: 0.95, letterSpacing: "-.03em", animation: "rise .6s .15s both" }}>
           Denied.
         </div>
         <p style={{ margin: "20px 0 0", maxWidth: 460, fontSize: 16, lineHeight: 1.6, color: "var(--muted)", animation: "rise .6s .25s both" }}>
@@ -1057,9 +1250,6 @@ function Refused({ result, onReset }: { result: Result; onReset: () => void }) {
             ))}
           </div>
           <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-            <button className="font-body" style={{ fontSize: 12, fontWeight: 600, color: "#fff", background: "linear-gradient(180deg,#3d7bff,#2b6bf3)", border: "none", borderRadius: 9, padding: "10px 18px", cursor: "pointer" }}>
-              Raise the cap
-            </button>
             <button onClick={onReset} className="font-body" style={{ fontSize: 12, fontWeight: 600, color: blue, background: "var(--accent-bg)", border: "1px solid var(--accent-line)", borderRadius: 9, padding: "10px 18px", cursor: "pointer" }}>
               New search
             </button>

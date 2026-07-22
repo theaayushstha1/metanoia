@@ -10,8 +10,15 @@ const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_HYPERSWITCH_PUBLISHABLE_KEY ?? "
 const KEY_READY = Boolean(PUBLISHABLE_KEY) && !PUBLISHABLE_KEY.includes("PASTE");
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
-// Load HyperLoader once at module scope (this file is "use client", browser-only).
-const hyperPromise = KEY_READY ? loadHyper(PUBLISHABLE_KEY) : undefined;
+// Client modules are still evaluated during Next.js server rendering. Guard the
+// browser-only loader and cache it globally so Fast Refresh cannot add the script twice.
+const browserGlobal = globalThis as typeof globalThis & {
+  __metanoiaHyperPromise?: ReturnType<typeof loadHyper>;
+};
+const hyperPromise =
+  KEY_READY && typeof window !== "undefined"
+    ? (browserGlobal.__metanoiaHyperPromise ??= loadHyper(PUBLISHABLE_KEY))
+    : undefined;
 
 /**
  * Creates a payment intent server-side (which also enforces the Spending
@@ -91,7 +98,11 @@ export default function CheckoutClient({
 
   return (
     <HyperElements options={options} hyper={hyperPromise}>
-      <CheckoutForm returnUrl={`${APP_URL}/checkout/complete`} amountLabel={amountLabel} paymentId={paymentId} />
+      <CheckoutForm
+        returnUrl={`${APP_URL}/checkout/complete?payment_id=${encodeURIComponent(paymentId ?? "")}`}
+        amountLabel={amountLabel}
+        paymentId={paymentId}
+      />
     </HyperElements>
   );
 }

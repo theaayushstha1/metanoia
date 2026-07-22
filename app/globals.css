@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 :root {
+  --font-bricolage: "Avenir Next", "Helvetica Neue", sans-serif;
+  --font-archivo: "Avenir Next", "Helvetica Neue", sans-serif;
+  --font-jbmono: "SFMono-Regular", "Cascadia Code", "Liberation Mono", monospace;
   --blue: #2b6bf3;
   --blue-d: #1e54d0;
   --blue-l: #4d8cff;
@@ -59,6 +62,120 @@ body {
 }
 .font-mono {
   font-family: var(--font-jbmono), monospace;
+}
+
+.mn-context-field input,
+.mn-context-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line-3);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ink);
+  padding: 10px 12px;
+  font: 12.5px/1.45 var(--font-archivo), sans-serif;
+  resize: vertical;
+  outline: none;
+}
+
+.mn-context-field input:focus,
+.mn-context-field textarea:focus {
+  border-color: var(--blue-l);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+@media (max-width: 980px) {
+  .mn-result-layout,
+  .mn-checkout-grid,
+  .mn-receipt-grid,
+  .mn-refused-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .mn-trace-rail {
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--line-2);
+  }
+
+  .mn-result-cards {
+    grid-template-columns: 1fr !important;
+  }
+
+  .mn-checkout-summary {
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--line-2);
+  }
+}
+
+@media (max-width: 720px) {
+  .mn-topbar {
+    height: auto !important;
+    min-height: 58px;
+    padding: 10px 16px !important;
+    gap: 10px;
+  }
+
+  .mn-topbar-status > :not(:last-child) {
+    display: none !important;
+  }
+
+  .mn-hero,
+  .mn-page-pad,
+  .mn-result-main,
+  .mn-refused-grid,
+  .mn-receipt-grid,
+  .mn-checkout-summary,
+  .mn-checkout-payment {
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+  }
+
+  .mn-hero {
+    padding-top: 42px !important;
+  }
+
+  .mn-hero-title {
+    font-size: 42px !important;
+  }
+
+  .mn-denied-title {
+    font-size: 58px !important;
+  }
+
+  .mn-mandate-grid,
+  .mn-context-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .mn-context-head,
+  .mn-command-footer {
+    align-items: stretch !important;
+    flex-direction: column;
+  }
+
+  .mn-preset-row {
+    overflow-x: auto;
+    padding-bottom: 3px;
+  }
+
+  .mn-preset-row button {
+    flex: none;
+  }
+
+  .mn-command-footer > button {
+    justify-content: center;
+  }
+
+  .mn-receipt-grid,
+  .mn-refused-grid {
+    gap: 30px !important;
+    padding-top: 32px !important;
+    padding-bottom: 40px !important;
+  }
+
+  .mn-capability-probe {
+    padding: 16px !important;
+  }
 }
 
 @keyframes rise {

@@ -209,6 +209,7 @@ export function TopBar({
 }) {
   return (
     <div
+      className="mn-topbar"
       style={{
         display: "flex",
         alignItems: "center",
@@ -246,7 +247,7 @@ export function TopBar({
           {tag}
         </span>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 9 }}>{right}</div>
+      <div className="mn-topbar-status" style={{ display: "flex", alignItems: "center", gap: 9 }}>{right}</div>
     </div>
   );
 }

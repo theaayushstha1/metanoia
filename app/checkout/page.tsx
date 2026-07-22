@@ -32,9 +32,10 @@ export default async function CheckoutPage({
             </Pill>
           }
         />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 460px", minHeight: 560 }}>
+        <div className="mn-checkout-grid" style={{ display: "grid", gridTemplateColumns: "1fr 460px", minHeight: 560 }}>
           {/* order summary */}
           <div
+            className="mn-checkout-summary"
             style={{
               background: "linear-gradient(160deg,#eef4ff,#f9fbff)",
               borderRight: "1px solid var(--line-2)",
@@ -99,7 +100,7 @@ export default async function CheckoutPage({
           </div>
 
           {/* payment — the real Hyperswitch SDK */}
-          <div style={{ padding: "56px 52px" }}>
+          <div className="mn-checkout-payment" style={{ padding: "56px 52px" }}>
             <div style={{ fontFamily: disp, fontWeight: 800, fontSize: 26, letterSpacing: "-.01em" }}>Pay with card</div>
             <p className="font-mono" style={{ margin: "8px 0 20px", fontSize: 10.5, letterSpacing: ".06em", color: "var(--faint)" }}>
               TEST CARD 4242 4242 4242 4242 · ANY FUTURE EXPIRY · ANY CVC

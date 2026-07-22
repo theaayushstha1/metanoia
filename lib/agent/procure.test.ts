@@ -49,14 +49,31 @@ describe("server-authoritative decide()", () => {
   });
 
   it("cannot be tricked into an over-cap plan (mandate bypass attempt)", () => {
-    // Even if the model 'selects' the premium/over-cap plan, the server refuses.
+    // Even if the model selects premium, the deterministic server ranking chooses
+    // the highest-ranked eligible plan and never authorizes the over-cap option.
     const ultra = decide(proposal({ selected_plan_id: "realtime_ultra" }), DEMO_CUSTOMER);
     expect(ultra.valid).toBe(true);
-    expect(ultra.verdict?.approved).toBe(false); // $49 > $40 per-charge cap
-    expect(ultra.confirmation_required).toBe(false);
+    expect(ultra.selected_plan_id).toBe("tickstream_pro");
+    expect(ultra.model_selected_plan_id).toBe("realtime_ultra");
+    expect(ultra.verdict?.approved).toBe(true);
+    expect(ultra.confirmation_required).toBe(true);
 
-    const compute = decide(proposal({ selected_plan_id: "compute_cluster" }), DEMO_CUSTOMER);
+    const compute = decide(
+      proposal({
+        requested_capability: "compute",
+        selected_plan_id: "compute_cluster",
+        normalized_requirements: { required_features: ["gpu_a100"] },
+      }),
+      DEMO_CUSTOMER
+    );
     expect(compute.verdict?.approved).toBe(false); // $59 > $40
+    expect(compute.confirmation_required).toBe(false);
+  });
+
+  it("rejects a model selection from the wrong capability", () => {
+    const d = decide(proposal({ selected_plan_id: "newsfeed_ai" }), DEMO_CUSTOMER);
+    expect(d.valid).toBe(false);
+    expect(d.confirmation_required).toBe(false);
   });
 
   it("fails safe on a hallucinated / unknown plan id", () => {

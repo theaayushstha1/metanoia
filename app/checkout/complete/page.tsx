@@ -5,6 +5,7 @@ import { getAttempt, getCredential, getSubscriptions, getIntentMandate } from "@
 import { getPlan, formatUsd } from "@/lib/catalog";
 import { DEMO_CUSTOMER } from "@/lib/constants";
 import { TopBar, Pill, Icon, LiveDot, usd } from "../../components/ui";
+import CapabilityProbe from "./CapabilityProbe";
 
 const blue = "var(--blue)";
 const disp = "var(--font-bricolage), sans-serif";
@@ -47,7 +48,6 @@ export default async function CompletePage({
   const credential = plan ? getCredential(DEMO_CUSTOMER, plan.id) : undefined;
   const committed = getSubscriptions(DEMO_CUSTOMER).reduce((s, x) => s + x.amount_cents, 0);
   const remaining = getIntentMandate().policy.monthly_cap_cents - committed;
-  const shortCred = credential ? `sub_${credential.slice(4, 12).toUpperCase()}` : "sub_—";
   const now = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
 
   return (
@@ -86,7 +86,7 @@ export default async function CompletePage({
             </Link>
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "520px 1fr", gap: 56, padding: "56px 64px", alignItems: "start", position: "relative", overflow: "hidden" }}>
+          <div className="mn-receipt-grid" style={{ display: "grid", gridTemplateColumns: "520px 1fr", gap: 56, padding: "56px 64px", alignItems: "start", position: "relative", overflow: "hidden" }}>
             <div style={{ position: "absolute", inset: 0, background: "radial-gradient(600px 280px at 30% -60px,rgba(77,140,255,.10),transparent)" }} />
 
             {/* receipt ticket */}
@@ -130,26 +130,7 @@ export default async function CompletePage({
               <div style={{ marginTop: 14, fontFamily: disp, fontWeight: 800, fontSize: 34, letterSpacing: "-.02em", animation: "rise .6s .35s both" }}>
                 Your agent can now {PHRASE[plan?.capability ?? ""] ?? "use the API"}.
               </div>
-              <div className="font-mono" style={{ marginTop: 24, border: "1px solid var(--line)", borderRadius: 12, background: "#0e1524", padding: "20px 24px", animation: "rise .6s .45s both" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 12, borderBottom: "1px solid rgba(255,255,255,.08)" }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#e05252" }} />
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#f0b429" }} />
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#18a04a" }} />
-                  <span style={{ fontSize: 10, color: "#7c8598", marginLeft: 8 }}>agent · live call</span>
-                </div>
-                <div style={{ marginTop: 14, fontSize: 12.5, lineHeight: 1.8 }}>
-                  <div style={{ color: "#7c8598" }}>› GET {plan?.resource ?? "/api/provider"}</div>
-                  <div style={{ color: "#4d8cff" }}>
-                    {"  "}authorization: {shortCred} <span style={{ color: "#18a04a" }}>✓ 200</span>
-                  </div>
-                  <div style={{ color: "#ece8e1", marginTop: 8 }}>{`{ "symbol": "AAPL", "price": `}<span style={{ color: "#4d8cff" }}>227.14</span>{` }`}</div>
-                  <div style={{ color: "#ece8e1" }}>{`{ "symbol": "NVDA", "price": `}<span style={{ color: "#4d8cff" }}>141.62</span>{` }`}</div>
-                  <div style={{ color: "#7c8598", marginTop: 8 }}>
-                    streaming {plan?.maxRps ?? 60} req/s
-                    <span style={{ display: "inline-block", width: 7, height: 13, background: "#4d8cff", verticalAlign: -2, marginLeft: 4, animation: "blink 1.1s step-end infinite" }} />
-                  </div>
-                </div>
-              </div>
+              {plan && <CapabilityProbe resource={plan.resource} credential={credential} />}
               <div style={{ display: "flex", gap: 12, marginTop: 24, animation: "rise .6s .55s both" }}>
                 <Link href="/" className="font-body" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: "#fff", background: "linear-gradient(180deg,#3d7bff,#2b6bf3)", borderRadius: 10, padding: "12px 22px", boxShadow: "0 8px 22px rgba(43,107,243,.35)" }}>
                   Back to workbench

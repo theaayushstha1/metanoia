@@ -28,15 +28,7 @@ export const vertex = createVertex({
   ...(googleCredentials ? { googleCredentials } : {}),
 });
 
-/**
- * The reasoning model for the buyer-agent. gemini-2.5-pro is the newest available
- * on Vertex for this project (3.x is not published here yet, as of 2026-07).
- *
- * Lazy: the model handle resolves the project on first call, not at import time,
- * so importing this module in tests (no Vertex env) doesn't throw.
- */
-// gemini-3.1-pro-preview is the flagship Gemini 3 Pro invokable from this project
-// (the reasoning agent). gemini-3.6-flash is the newest Flash for fast/light roles.
+/** Lazy model handles keep imports safe in tests that do not configure Vertex. */
 export const agentModel = () => vertex("gemini-3.1-pro-preview");
 export const fastModel = () => vertex("gemini-3.6-flash");
 
