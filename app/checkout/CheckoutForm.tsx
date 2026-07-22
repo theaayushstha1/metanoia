@@ -9,7 +9,13 @@ import { useHyper, useWidgets, UnifiedCheckout } from "@juspay-tech/react-hyper-
  *
  * Note: Hyperswitch's confirmPayment takes `widgets` (not Stripe's `elements`).
  */
-export default function CheckoutForm({ returnUrl }: { returnUrl: string }) {
+export default function CheckoutForm({
+  returnUrl,
+  amountLabel,
+}: {
+  returnUrl: string;
+  amountLabel?: string;
+}) {
   const hyper = useHyper();
   const widgets = useWidgets();
   const [isLoading, setIsLoading] = useState(false);
@@ -38,16 +44,42 @@ export default function CheckoutForm({ returnUrl }: { returnUrl: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit}>
       <UnifiedCheckout id="unified-checkout" options={{}} />
       <button
         type="submit"
         disabled={!hyper || !widgets || isLoading}
-        className="w-full rounded-lg bg-[#3b4cff] px-4 py-3 font-medium text-white disabled:opacity-50"
+        className="font-body"
+        style={{
+          width: "100%",
+          marginTop: 18,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 10,
+          fontSize: 15,
+          fontWeight: 600,
+          color: "#fff",
+          background: "linear-gradient(180deg,#3d7bff,#2b6bf3)",
+          border: "none",
+          borderRadius: 11,
+          padding: 15,
+          boxShadow: "0 10px 26px rgba(43,107,243,.38)",
+          cursor: isLoading ? "default" : "pointer",
+          opacity: !hyper || !widgets || isLoading ? 0.6 : 1,
+        }}
       >
-        {isLoading ? "Processing…" : "Pay & authorize renewals"}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
+          <rect x="4" y="11" width="16" height="10" rx="2" />
+          <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+        </svg>
+        {isLoading ? "Processing…" : `Pay ${amountLabel ?? ""}`.trim()}
       </button>
-      {message && <p className="text-sm text-neutral-300">{message}</p>}
+      {message && (
+        <p className="font-mono" style={{ marginTop: 12, fontSize: 12, color: "var(--muted)" }}>
+          {message}
+        </p>
+      )}
     </form>
   );
 }

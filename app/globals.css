@@ -1,26 +1,129 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --blue: #2b6bf3;
+  --blue-d: #1e54d0;
+  --blue-l: #4d8cff;
+  --ink: #0e1524;
+  --ink-2: #3c4457;
+  --muted: #5b6472;
+  --faint: #98a2b8;
+  --line: #dfe6f3;
+  --line-2: #eef2fa;
+  --line-3: #e3e9f5;
+  --panel: #f7f9fe;
+  --accent-bg: #eef4ff;
+  --accent-line: #c9dbff;
+  --green: #12873c;
+  --green-2: #18a04a;
+  --green-bg: #e8f7ee;
+  --red: #c02f2f;
+  --red-2: #e05252;
+  --red-bg: #fdeeee;
+  --page: #e9eef8;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-bricolage);
+  --font-body: var(--font-archivo);
+  --font-mono: var(--font-jbmono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  background-color: var(--page);
+  background-image: radial-gradient(circle, rgba(43, 89, 195, 0.1) 1px, transparent 1px);
+  background-size: 26px 26px;
+  color: var(--ink);
+  font-family: var(--font-archivo), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The framed "screen" card used across pages */
+.mn-screen {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(20, 40, 90, 0.12);
+  color: var(--ink);
+}
+
+.font-display {
+  font-family: var(--font-bricolage), sans-serif;
+}
+.font-mono {
+  font-family: var(--font-jbmono), monospace;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  70% {
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+@keyframes blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes lockin {
+  0% {
+    box-shadow: inset 3px 0 0 var(--blue), 0 0 0 0 rgba(43, 107, 243, 0.35);
+  }
+  100% {
+    box-shadow: inset 3px 0 0 var(--blue), 0 0 0 16px rgba(43, 107, 243, 0);
+  }
+}
+@keyframes drift {
+  0% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(0, -8px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+@keyframes dash {
+  to {
+    stroke-dashoffset: 0;
+  }
 }

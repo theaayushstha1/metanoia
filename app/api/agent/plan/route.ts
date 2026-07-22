@@ -3,6 +3,8 @@ import { z } from "zod";
 import { runProcurement } from "@/lib/agent/procure";
 import { getPlan, formatUsd, type Plan } from "@/lib/catalog";
 import { DEMO_CUSTOMER } from "@/lib/constants";
+import { getIntentMandate, getSubscriptions } from "@/lib/store";
+import { evaluateAgainstConstitution } from "@/lib/agent/spendCap";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -38,12 +40,31 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await runProcurement(parsed.data.request, DEMO_CUSTOMER);
-    const candidates = (result.proposal?.considered_plan_ids ?? [])
+    const consideredPlans = (result.proposal?.considered_plan_ids ?? [])
       .map((id) => getPlan(id))
-      .filter((p): p is Plan => Boolean(p))
-      .map(candidateView);
+      .filter((p): p is Plan => Boolean(p));
+    const candidates = consideredPlans.map(candidateView);
 
-    return NextResponse.json({ ...result, candidates });
+    // If nothing was selected, surface the plan the agent wanted but couldn't afford
+    // (the priciest considered) with its authoritative audit, for the "Denied" screen.
+    let blocked: { plan: ReturnType<typeof candidateView>; verdict: unknown } | null = null;
+    if (!result.decision.selected_plan_id && consideredPlans.length) {
+      const culprit = [...consideredPlans].sort((a, b) => b.priceCents - a.priceCents)[0];
+      const verdict = evaluateAgainstConstitution({
+        intent: getIntentMandate(),
+        item: {
+          plan_id: culprit.id,
+          label: culprit.name,
+          merchant_name: culprit.vendor,
+          category: culprit.category,
+          amount_cents: culprit.priceCents,
+        },
+        existing: getSubscriptions(DEMO_CUSTOMER),
+      });
+      blocked = { plan: candidateView(culprit), verdict };
+    }
+
+    return NextResponse.json({ ...result, candidates, blocked });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Agent error";
     return NextResponse.json({ error: message }, { status: 500 });

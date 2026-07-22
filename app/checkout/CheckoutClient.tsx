@@ -16,7 +16,13 @@ const hyperPromise = KEY_READY ? loadHyper(PUBLISHABLE_KEY) : undefined;
  * Creates a payment intent server-side (which also enforces the Spending
  * Constitution) then mounts the embedded Unified Checkout when ready.
  */
-export default function CheckoutClient({ planId }: { planId: string }) {
+export default function CheckoutClient({
+  planId,
+  amountLabel,
+}: {
+  planId: string;
+  amountLabel?: string;
+}) {
   const [options, setOptions] = useState<Record<string, unknown>>({});
   const [error, setError] = useState<string>(
     KEY_READY ? "" : "Add your Hyperswitch publishable key to .env.local and restart the dev server."
@@ -35,7 +41,11 @@ export default function CheckoutClient({ planId }: { planId: string }) {
         if (cancelled) return;
         if (data.refused) setError(`Refused by the mandate: ${data.verdict?.summary ?? ""}`);
         else if (data.error) setError(data.error);
-        else setOptions({ clientSecret: data.clientSecret, appearance: { theme: "midnight" } });
+        else
+          setOptions({
+            clientSecret: data.clientSecret,
+            appearance: { theme: "default", variables: { colorPrimary: "#2b6bf3" } },
+          });
       })
       .catch((e) => {
         if (!cancelled) setError(String(e));
@@ -47,19 +57,33 @@ export default function CheckoutClient({ planId }: { planId: string }) {
 
   if (error) {
     return (
-      <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
+      <div
+        className="font-mono"
+        style={{
+          border: "1px solid var(--accent-line)",
+          background: "var(--red-bg)",
+          borderRadius: 10,
+          padding: "14px 16px",
+          fontSize: 12.5,
+          color: "var(--red)",
+        }}
+      >
         {error}
       </div>
     );
   }
 
   if (!hyperPromise || !("clientSecret" in options)) {
-    return <div className="animate-pulse text-sm text-neutral-400">Preparing secure checkout…</div>;
+    return (
+      <div className="font-mono" style={{ fontSize: 12.5, color: "var(--faint)", animation: "pulse 1.6s ease-in-out infinite" }}>
+        Preparing secure checkout…
+      </div>
+    );
   }
 
   return (
     <HyperElements options={options} hyper={hyperPromise}>
-      <CheckoutForm returnUrl={`${APP_URL}/checkout/complete`} />
+      <CheckoutForm returnUrl={`${APP_URL}/checkout/complete`} amountLabel={amountLabel} />
     </HyperElements>
   );
 }
