@@ -120,7 +120,7 @@ export default function Workbench({ mandate }: { mandate: Mandate }) {
   const refused = Boolean(result && !approved);
 
   return (
-    <div className="mn-screen" style={{ width: "100%", maxWidth: 1360 }}>
+    <div style={{ minHeight: "100vh", background: "#fff" }}>
       {refused && (
         <div style={{ height: 4, background: "linear-gradient(90deg,var(--blue),var(--red-2))" }} />
       )}

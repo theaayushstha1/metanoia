@@ -4,15 +4,7 @@ import { getIntentMandate } from "@/lib/store";
 export default function Home() {
   const { policy } = getIntentMandate();
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "center",
-        padding: "40px 24px",
-      }}
-    >
+    <main style={{ minHeight: "100vh" }}>
       <Workbench
         mandate={{
           monthly: policy.monthly_cap_cents,

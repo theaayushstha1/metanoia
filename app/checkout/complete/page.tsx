@@ -51,8 +51,8 @@ export default async function CompletePage({
   const now = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
 
   return (
-    <main style={{ minHeight: "100vh", display: "flex", justifyContent: "center", padding: "40px 24px" }}>
-      <div className="mn-screen" style={{ width: "100%", maxWidth: 1360 }}>
+    <main style={{ minHeight: "100vh" }}>
+      <div style={{ minHeight: "100vh", background: "#fff" }}>
         <TopBar
           tag="RECEIPT"
           right={

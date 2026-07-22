@@ -22,8 +22,8 @@ export default async function CheckoutPage({
     : [];
 
   return (
-    <main style={{ minHeight: "100vh", display: "flex", justifyContent: "center", padding: "40px 24px" }}>
-      <div className="mn-screen" style={{ width: "100%", maxWidth: 1360 }}>
+    <main style={{ minHeight: "100vh" }}>
+      <div style={{ minHeight: "100vh", background: "#fff" }}>
         <TopBar
           tag="CHECKOUT"
           right={
