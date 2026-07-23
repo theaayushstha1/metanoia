@@ -101,9 +101,10 @@ export default function PaymentDetails(p: PaymentDetailsProps) {
               target="_blank"
               rel="noopener noreferrer"
               className="font-mono"
+              title="Opens the Hyperswitch Payments list. Search the payment id above to open this exact payment."
               style={{ flex: "none", display: "inline-flex", alignItems: "center", gap: 8, fontSize: 11.5, fontWeight: 600, color: blue, border: `1px solid ${blue}`, borderRadius: 10, padding: "9px 16px", whiteSpace: "nowrap" }}
             >
-              Open in Hyperswitch dashboard
+              Open Hyperswitch dashboard
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M7 17 17 7M9 7h8v8" stroke={blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
