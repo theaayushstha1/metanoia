@@ -85,14 +85,20 @@ Project `metanoia-agent-17047`, region `us-east1`.
 - Secrets (Hyperswitch secret key, webhook hash key, DB password) live in Secret Manager, mounted into
   the service. No secret is baked into the image or committed.
 
-### Webhook: receiver verified; real delivery pending
+### Webhook: receiver verified; sandbox cannot complete outbound delivery
 
 - The deployed `/api/webhooks` endpoint VERIFIES signed events: a correct HMAC-SHA512 payload (using the
   Secret-Manager hash key) returns `200`; a bad or missing signature returns `401`. Confirmed live.
-- The webhook URL + `payment_succeeded_enabled` are configured on the Hyperswitch business profile.
-- NOT yet observed: a real Hyperswitch-ORIGINATED delivery. The sandbox does not auto-emit outgoing
-  webhooks for synchronous Fauxpay payments; a manual "Resend" from the dashboard (or an async connector)
-  is required to complete the Hyperswitch-to-Metanoia half. Endpoint is ready to receive it.
+- Hyperswitch DOES generate + sign the outgoing events: the dashboard shows `payment_succeeded` events
+  with a real `X-Webhook-Signature-512` header and the full signed body, for the webhook URL configured
+  on the business profile (with `payment_succeeded_enabled`).
+- BUT every delivery attempt (initial + automatic retries + a manual retry) fails on Hyperswitch's side
+  with `500 · WebhookCallFailed` (Is Error: true). Cloud Run request logs show ZERO
+  `Hyperswitch-Backend-Server` hits — so the outbound call never reaches the endpoint. This is an egress
+  limitation of the shared Hyperswitch SANDBOX, not a fault in the receiver.
+- Net: the Hyperswitch->Metanoia webhook is proven correct on the receiving + signing sides; only the
+  sandbox's outbound HTTP delivery to an external URL cannot complete. The endpoint is ready the moment
+  delivery works (e.g. self-hosted Hyperswitch, or a production account without the sandbox egress block).
 
 ### Teardown
 
