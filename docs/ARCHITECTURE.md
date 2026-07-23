@@ -52,7 +52,7 @@ flowchart TB
     CO --> PAY --> CHK --> HSC --> HS
     RC --> PROV
     REN --> CHK
-    HS -. signed webhook .-> WH --> CHK
+    HS -. signed webhook .-> RLY[["HMAC relay ingress (Vercel)"]] -. verified, forwarded .-> WH --> CHK
     AGENT --> VTX
     SCOUT --> VTX
     PROF --> GH
@@ -159,6 +159,7 @@ sequenceDiagram
     participant B as Browser
     participant CO as lib/checkout
     participant HS as Hyperswitch
+    participant RLY as Relay ingress (Vercel)
     participant S as Store
 
     rect rgb(238,244,255)
@@ -179,10 +180,12 @@ sequenceDiagram
     CO->>S: settle succeeded ⇒ confirmPaid, else markPaymentFailed
     end
 
-    rect rgb(253,238,238)
-    note over HS,S: Webhook (async, signed)
-    HS-->>S: POST /api/webhooks (raw body)
-    S->>S: verify HMAC (SHA-512/256, timing-safe)
+    rect rgb(232,247,238)
+    note over HS,S: Webhook (async, signed) — LIVE-VERIFIED
+    HS-->>RLY: POST signed event (reaches the relay; direct *.run.app does not land, transport reason unconfirmed)
+    RLY->>RLY: verify HMAC (SHA-512/256) over the raw body
+    RLY-->>S: forward the untouched raw body to /api/webhooks
+    S->>S: verify HMAC again (timing-safe)
     S->>S: ONE tx: dedupe(event_id) → settle → upsert subscription → issue credential
     note right of S: unknown payment ⇒ event retained (processed=false), never dropped
     end

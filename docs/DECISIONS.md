@@ -70,7 +70,9 @@ idempotency key, then settle it. A crash leaves an auditable pending row, not a 
 PK → settle → upsert subscription → issue credential, with an out-of-order timestamp guard. Unknown-payment
 events are **retained** (`processed=false`), never dropped.
 **Rejected.** Fire-and-forget handling; marking-and-dropping unknown events.
-**Consequences.** Correctness is enforced by DB constraints. **[CODED-UNTESTED]** against a live signed event.
+**Consequences.** Correctness is enforced by DB constraints. **[LIVE-VERIFIED]** — real Hyperswitch
+`payment_succeeded` events now settle known Metanoia payments (`events.processed=true`), confirmed in the relay
+ingress + Cloud Run logs and the `events` table; unknown-payment events are retained (`processed=false`).
 
 ## ADR-009 — Dual-backend store (in-memory + Cloud SQL), disk-persisted locally
 **Context.** Serverless in-memory state is per-instance and racy; tests need to be fast.
@@ -125,6 +127,18 @@ connection name), reusing the same Google credentials as the agent.
 fictional; separate researched (external) providers from purchasable (onboarded) offers everywhere.
 **Rejected.** Presenting real brands as purchasable; implying external vendor API calls.
 **Consequences.** Credible under scrutiny; less superficial "wow." **[LIVE-VERIFIED]**.
+
+## ADR-016 — HMAC-verifying relay ingress in front of Cloud Run (webhook delivery)
+**Context.** Hyperswitch's hosted sandbox reaches neutral collectors, but its webhook POST does not land on the
+Cloud Run `*.run.app` endpoint; the low-level Google transport reason is unconfirmed.
+**Decision.** Front the receiver with a small HMAC-verifying relay ingress (deployed on Vercel) that Hyperswitch
+can reach. The relay verifies the Hyperswitch HMAC over the raw body and forwards the untouched body to the Cloud
+Run receiver, which verifies the same HMAC again and stays the only component that mutates payment state.
+**Rejected.** Claiming direct Hyperswitch-to-Cloud-Run delivery; a stable-IP HTTPS load balancer (heavier for a
+demo); trusting the edge and skipping the second verification.
+**Consequences.** Signed events now reach the receiver and settle in Cloud SQL (two HMAC checks, one extra hop).
+The exact `run.app` transport incompatibility remains unconfirmed and is not claimed. **[LIVE-VERIFIED]** — real
+events delivered and settled known payments.
 
 ---
 
