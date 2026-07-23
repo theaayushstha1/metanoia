@@ -56,3 +56,21 @@ export function ownsAttempt(
   if (!sessionCustomerId || sessionCustomerId === ANON_CUSTOMER) return false;
   return attempt.customerId === sessionCustomerId;
 }
+
+/**
+ * Pure ownership check for a retrieved Hyperswitch payment (no cookies) — testable.
+ * The receipt must apply this BEFORE settling or rendering a payment, matching the refund
+ * and lab routes. The retrieved payment carries the `customer_id` it was created under; an
+ * anonymous/absent session and a mismatched (tampered or cross-session) id own nothing, and
+ * a payment with no `customer_id` is treated as unowned.
+ */
+export function ownsPayment(
+  payment: { customer_id?: unknown } | null | undefined,
+  sessionCustomerId: string
+): boolean {
+  const customerId =
+    payment && typeof payment.customer_id === "string" ? payment.customer_id : undefined;
+  if (!customerId) return false;
+  if (!sessionCustomerId || sessionCustomerId === ANON_CUSTOMER) return false;
+  return customerId === sessionCustomerId;
+}

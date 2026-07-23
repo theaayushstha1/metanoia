@@ -9,7 +9,7 @@ import {
   getSavedPaymentMethod,
 } from "@/lib/store";
 import { CATALOG, getPlan, formatUsd, type Plan } from "@/lib/catalog";
-import { getSessionCustomerId } from "@/lib/session";
+import { getSessionCustomerId, ownsPayment } from "@/lib/session";
 import { TopBar, Pill, LiveDot, usd } from "../../components/ui";
 import PaymentTrace, { type TraceStep } from "./PaymentTrace";
 import PaymentDetails from "./PaymentDetails";
@@ -53,11 +53,10 @@ export default async function CompletePage({
   if (payment_id) {
     try {
       const p = await getPayment(payment_id);
-      const customerId = typeof p.customer_id === "string" ? p.customer_id : undefined;
       // Same ownership rule the refund and lab routes enforce: never settle or render a
       // payment this browser session does not own. The retrieved payment is authoritative —
       // it carries the customer it was created under. Gate BEFORE settling or rendering.
-      if (!customerId || customerId !== sessionCustomer) {
+      if (!ownsPayment(p, sessionCustomer)) {
         notOwned = true;
       } else {
         payment = p;
@@ -71,7 +70,7 @@ export default async function CompletePage({
             if (recoveredPlan) {
               await recordAttempt({
                 paymentId: payment_id,
-                customerId,
+                customerId: sessionCustomer,
                 planId: recoveredPlan.id,
                 amountCents: p.amount,
               });
