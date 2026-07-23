@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Metanoia — Walkthrough Script</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=JetBrains+Mono:wght@400;600&display=swap');
+:root{--paper:#fbfaf5;--ink:#20202a;--muted:#59596a;--line:#d9d6cc;--blue:#2b56d6;--blue-soft:#eef1fc;--green:#1f8a54;--red:#c23b46;--hand:'Caveat',cursive;--serif:'Newsreader',Georgia,serif;--mono:'JetBrains Mono',monospace;}
+*{box-sizing:border-box}
+html,body{margin:0;background:#e7e5df}
+body{font-family:var(--serif);color:var(--ink);font-size:10.6px;line-height:1.48}
+.page{width:8.5in;height:11in;background:var(--paper);margin:0 auto;padding:0.5in 0.6in 0.4in;position:relative;overflow:hidden}
+.page:not(:last-child){page-break-after:always}
+.sub{font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--blue);font-weight:600}
+h1{font-family:var(--serif);font-weight:600;font-size:21px;margin:1px 0 3px}
+.intro{font-size:10.8px;color:#33333f;margin:0 0 8px}
+.seg{border-left:3px solid var(--blue);padding:2px 0 2px 11px;margin:9px 0 3px;display:flex;align-items:baseline;gap:9px}
+.seg .h{font-family:var(--hand);font-size:21px;color:var(--blue);font-weight:700;line-height:1}
+.seg .t{font-weight:600;font-size:13px}
+.seg .time{font-family:var(--mono);font-size:7.4px;color:var(--muted);margin-left:auto;letter-spacing:.06em}
+ul{margin:2px 0 4px;padding-left:15px}
+li{margin:2.6px 0}
+.cue{font-weight:600;color:var(--blue)}
+.mono{font-family:var(--mono);font-size:8.8px}
+.q{font-family:var(--hand);font-size:15.5px;color:#2a2a36;line-height:1.14}
+.qb{color:var(--green)}
+.foot{position:absolute;bottom:0.25in;left:0.6in;right:0.6in;display:flex;justify-content:space-between;font-family:var(--mono);font-size:6.8px;color:var(--muted);letter-spacing:.06em;border-top:1px solid var(--line);padding-top:4px}
+.note{background:var(--blue-soft);border-radius:7px;padding:5px 9px;font-size:9.4px;margin:4px 0}
+</style></head><body>
+
+<!-- PAGE 1 -->
+<div class="page">
+  <div class="sub">Walkthrough script · read off these · about 6 to 7 minutes</div>
+  <h1>Metanoia: recording cue sheet</h1>
+  <p class="intro">These are talking points, not a paragraph to read word for word. <span class="cue">Bold blue</span>
+  is the line to actually say. The rest is what to point at. The handwritten lines are the ones that land, so say
+  them like you mean them.</p>
+
+  <div class="seg"><span class="h">1</span><span class="t">What it is</span><span class="time">0:00 · 30s</span></div>
+  <ul>
+    <li>Metanoia is a storefront for <b>agent&#8209;led subscription commerce</b>, built on Juspay Hyperswitch.</li>
+    <li class="q qb">"You give an AI agent a spending mandate instead of your credit card. It shops, compares, and buys a subscription for you, and Hyperswitch settles the real payment in the sandbox."</li>
+    <li><span class="cue">The whole design in one line: the model proposes, the server decides, Hyperswitch settles.</span> An LLM can recommend. It can never set a price or move money.</li>
+  </ul>
+
+  <div class="seg"><span class="h">2</span><span class="t">The live demo (deployed URL)</span><span class="time">0:30 · 3 min</span></div>
+  <ul>
+    <li><b>Home and mandate.</b> Point at the three limits: $60 a month, $40 per charge, a max number of subscriptions. <span class="cue">"I set the envelope. The server enforces it. The agent cannot touch these."</span></li>
+    <li><b>Context.</b> "I can give it optional signals." Show the GitHub repo (<span class="mono">aftertalk</span>) and the X profile you typed in. Then type the request: <span class="mono">"LLM inference API, tool calling and long context, under $40."</span></li>
+    <li><b>Run, then Decision Authority.</b> <span class="cue">"Gemini proposed Apex LLM Pro. The server overrode it and chose Relay LLM, because it scored higher on my priorities, 76 to 71."</span> Point at MODEL PROPOSED versus SERVER FINAL, and the red SERVER OVERRIDE reason.</li>
+    <li><b>Point at</b> the deterministic ranking bars, SpendGuard 4 of 4 PASS, and Nano Chat <b>blocked</b> for missing tool calling. <span class="cue">"The scores are computed, not the model's opinion."</span></li>
+    <li><b>Confirm, then Checkout.</b> <span class="cue">"This is real Hyperswitch Unified Checkout. I type the test card into their iframe, so the card never touches my server."</span> Card <span class="mono">4242 4242 4242 4242</span>, then pay.</li>
+    <li><b>Receipt.</b> "Settled." Point at capability <span class="mono">200 · SANDBOX LIVE</span>, which proves what it bought works, and the green <b>Signed webhook delivered</b> line on the trace (refresh if the async event is still in flight). Then scroll to the <b>live payment record</b>. <span class="cue">"This is pulled straight from the Hyperswitch API: connector, transaction ID, card network. The same record their dashboard shows. Nothing faked."</span></li>
+    <li><b>Honesty beats.</b> Over&#8209;budget A100 gives a big red <b>Denied</b>, "card never touched." Then "find cheaper" on the LLM gives a <b>no&#8209;match tradeoffs</b> screen with no charge. <span class="cue">"A budget refusal and 'we don't carry that' are different screens. I never blur them."</span></li>
+    <li><b>Extras.</b> Subscriptions tab (view and cancel), Payment Test Lab (test cards and a real owned&#8209;only refund), and session isolation. <span class="cue">"Open my receipt from another browser and you get nothing."</span></li>
+  </ul>
+
+  <div class="seg"><span class="h">3</span><span class="t">The GitHub repo</span><span class="time">3:30 · 1 min</span></div>
+  <ul>
+    <li><span class="mono">github.com/theaayushstha1/metanoia</span>. <span class="cue">"Everything is here, and it is honest about what is proven versus deferred."</span></li>
+    <li><b>Point at the layout.</b> <span class="mono">app/</span> holds the routes, workbench, and checkout. <span class="mono">lib/agent/</span> holds procure, ranking, spendCap, and scouts. <span class="mono">lib/checkout</span> and <span class="mono">lib/hyperswitch</span> are the only code that can move money, and the agent cannot reach them. <span class="mono">lib/ap2/</span> holds the mandate shapes, and <span class="mono">lib/db</span> plus store is the dual backend.</li>
+    <li><span class="cue">"87 tests green, type&#8209;check and lint clean."</span> Call out the tests that matter: SpendGuard, the decision&#8209;authority override, idempotency, renewal, and session ownership.</li>
+    <li><span class="cue">"It is deployed on Cloud Run, Cloud SQL, Vertex, and Secret Manager, and a real payment completes on the live URL."</span></li>
+  </ul>
+
+  <div class="foot"><span>METANOIA · WALKTHROUGH SCRIPT</span><span>Aayush Shrestha</span><span>1 / 2</span></div>
+</div>
+
+<!-- PAGE 2 -->
+<div class="page">
+  <div class="seg"><span class="h">4</span><span class="t">The architecture doc (the PDF)</span><span class="time">4:30 · 1 min</span></div>
+  <ul>
+    <li><span class="cue">"I framed it around the industry and the payment choices, in three pages."</span> Walk the three figures.</li>
+    <li><b>Fig 1, the end&#8209;to&#8209;end flow.</b> <span class="cue">"The green boxes are the deterministic authority. The red dashed ones are deferred or refused, where the card is never touched."</span></li>
+    <li><b>Fig 2, the authority boundary.</b> <span class="cue">"Model proposes, server decides, Hyperswitch settles. Only a proposal crosses from the model to the server. Only the server can move money. The LLM has no payment tool."</span></li>
+    <li><b>Fig 3, the payment sequence.</b> <span class="cue">"SpendGuard runs again on the server before Hyperswitch is ever called. A refusal means a 403 and no payment intent."</span></li>
+    <li>Mention the trust boundaries: untrusted input wrapped as "data, not instructions," an SSRF&#8209;guarded GitHub fetch, and the secret key kept server&#8209;side only.</li>
+  </ul>
+
+  <div class="seg"><span class="h">5</span><span class="t">The decisions doc (ADRs)</span><span class="time">5:30 · 1 min</span></div>
+  <ul>
+    <li><span class="cue">"Every real decision is written down, with the alternative I rejected."</span> The payment ones I would highlight:</li>
+    <li><b>Model proposes, server decides.</b> The LLM only emits a structured proposal. <span class="mono">decide()</span> re&#8209;validates on server&#8209;owned prices and can override it.</li>
+    <li><b>SpendGuard before any charge.</b> It checks the caps in order and returns <span class="mono">403</span> before Hyperswitch is contacted.</li>
+    <li><b>Fauxpay for checkout, Stripe reserved for recurring.</b> <span class="cue">"Fauxpay reliably settles the checkout. Real off&#8209;session recurring needs a reusable payment&#8209;method id, which only a real connector returns."</span></li>
+    <li><b>Stable payment IDs give idempotency.</b> <span class="mono">pay_ = sha256(customer:plan:period)</span>, so a retry reuses the intent and never charges twice.</li>
+    <li><b>Pending&#8209;first renewal</b> for crash durability, and <b>atomic, HMAC&#8209;verified webhooks</b> that retain unknown events.</li>
+    <li><span class="cue">"Connectors are processors, not payment methods. The customer picks a card, and routing is my decision. Unified Checkout keeps me out of PCI scope."</span></li>
+  </ul>
+
+  <div class="seg"><span class="h">6</span><span class="t">Webhooks and the honest limits</span><span class="time">6:30 · 30s</span></div>
+  <ul>
+    <li><b>Webhooks (proven).</b> <span class="cue">"Signed Hyperswitch events reach an HMAC-verifying ingress, which forwards the untouched body to the Cloud Run receiver. Cloud Run verifies the HMAC again and settles the payment in Cloud SQL, deduped by event id."</span> I confirmed it in the ingress and Cloud Run logs and the events table, for real payments. The low-level reason a direct run.app delivery does not land is still unconfirmed.</li>
+    <li><b>Off&#8209;session MIT (the one honest edge).</b> It is coded, but <span class="cue">connector&#8209;blocked: Stripe returns UE_9000 until the account gets raw&#8209;card API access.</span> Fauxpay returns no reusable method.</li>
+    <li><b>Deferred.</b> The automatic renewal scheduler, where the path is already tested, and AP2 cryptographic mandate signatures.</li>
+  </ul>
+
+  <div class="seg"><span class="h">7</span><span class="t">Close</span><span class="time">7:00 · 15s</span></div>
+  <ul>
+    <li class="q">"Agents are becoming the customer. Metanoia is the settlement layer for when an agent actually buys, on Hyperswitch."</li>
+    <li class="q qb">"And the one guarantee under all of it: the number that gets charged is computed by deterministic, unit&#8209;tested server code, on data the model never authored."</li>
+  </ul>
+
+  <div class="note"><b>Before you record:</b> have the deployed URL, the GitHub repo, and both PDFs open in tabs.
+  Payments occasionally 429 on the sandbox, so if the Pay button stalls, click it once more. Keep the mandate
+  visible when you say "the server enforces it."</div>
+
+  <div class="foot"><span>METANOIA · WALKTHROUGH SCRIPT</span><span>github.com/theaayushstha1/metanoia · live on Cloud Run</span><span>2 / 2</span></div>
+</div>
+</body></html>

@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Metanoia — Architecture & Decisions</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root{
+  --paper:#fbfaf5; --ink:#20202a; --muted:#59596a; --line:#d9d6cc;
+  --blue:#2b56d6; --blue-soft:#eef1fc; --green:#1f8a54; --green-soft:#e8f6ee;
+  --red:#c23b46; --red-soft:#fbecec; --amber:#b8791a;
+  --hand:'Caveat',cursive; --serif:'Newsreader',Georgia,serif; --mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#e7e5df}
+body{font-family:var(--serif); color:var(--ink); font-size:10.3px; line-height:1.52;}
+.page{
+  width:8.5in; height:11in; background:var(--paper); margin:0 auto; padding:0.5in 0.55in 0.45in;
+  position:relative; overflow:hidden;
+}
+.page:not(:last-child){page-break-after:always}
+svg .rough{ filter:url(#rough); }
+h1{font-family:var(--serif); font-weight:600; font-size:23px; letter-spacing:-.01em; margin:0 0 2px}
+.sub{font-family:var(--mono); font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:var(--blue); font-weight:600}
+h2{font-family:var(--serif); font-weight:600; font-size:13.5px; margin:15px 0 5px; padding-bottom:3px; border-bottom:1.5px solid var(--ink);}
+h2 .n{font-family:var(--hand); font-size:20px; color:var(--blue); margin-right:7px; font-weight:700}
+p{margin:0 0 6px}
+b,strong{font-weight:600}
+.mono{font-family:var(--mono); font-size:8.6px}
+.hand{font-family:var(--hand); font-size:15px; line-height:1.16; color:#3a3a48}
+.lede{font-size:11.6px; line-height:1.5; color:#33333f}
+.cols{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+ul{margin:2px 0 7px; padding-left:15px}
+li{margin:1.5px 0}
+.tag{font-family:var(--mono); font-size:6.8px; letter-spacing:.06em; padding:1.5px 5px; border-radius:99px; font-weight:600; vertical-align:middle; white-space:nowrap}
+.built{background:var(--green-soft); color:var(--green)}
+.def{background:var(--red-soft); color:var(--red)}
+.block{background:#fdf3e3; color:var(--amber)}
+.callout{font-family:var(--hand); font-size:15.5px; color:var(--blue); line-height:1.16; background:var(--blue-soft);
+  border-left:3px solid var(--blue); padding:7px 10px; border-radius:0 8px 8px 0; margin:8px 0}
+figure{margin:9px 0 4px}
+figcaption{font-family:var(--mono); font-size:7.2px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); text-align:center; margin-top:3px}
+table{border-collapse:collapse; width:100%; font-size:9px; margin:3px 0}
+td,th{border:1px solid var(--line); padding:3px 6px; text-align:left; vertical-align:top}
+th{background:#f2f0e8; font-weight:600; font-family:var(--mono); font-size:7.4px; letter-spacing:.06em; text-transform:uppercase}
+.foot{position:absolute; bottom:0.28in; left:0.55in; right:0.55in; display:flex; justify-content:space-between;
+  font-family:var(--mono); font-size:6.8px; color:var(--muted); letter-spacing:.06em; border-top:1px solid var(--line); padding-top:4px}
+.dbox{fill:#fff; stroke:var(--ink); stroke-width:1.4}
+.dblue{fill:var(--blue-soft); stroke:var(--blue); stroke-width:1.4}
+.dgreen{fill:var(--green-soft); stroke:var(--green); stroke-width:1.4}
+.dred{fill:var(--red-soft); stroke:var(--red); stroke-width:1.4}
+.dlbl{font-family:var(--serif); font-size:8.4px; font-weight:500; fill:var(--ink)}
+.dlbl.sm{font-size:7px}
+.dann{font-family:var(--hand); font-size:12.5px; fill:var(--blue)}
+.dann.g{fill:var(--green)} .dann.r{fill:var(--red)}
+.arr{stroke:var(--ink); stroke-width:1.4; fill:none; marker-end:url(#ah)}
+.arrb{stroke:var(--blue); stroke-width:1.4; fill:none; marker-end:url(#ahb)}
+.arrd{stroke:var(--red); stroke-width:1.3; fill:none; marker-end:url(#ahr); stroke-dasharray:4 3}
+.mono-s{font-family:var(--mono); font-size:6.6px; fill:var(--muted)}
+</style>
+</head>
+<body>
+
+<!-- ============ PAGE 1 ============ -->
+<div class="page">
+  <svg width="0" height="0" style="position:absolute">
+    <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="7" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.1"/></filter>
+    <marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="#20202a"/></marker>
+    <marker id="ahb" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="#2b56d6"/></marker>
+    <marker id="ahr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="#c23b46"/></marker>
+  </svg>
+
+  <div class="sub">Juspay Hyperswitch prototype · US market · architecture &amp; decisions</div>
+  <h1>Metanoia: when your agent becomes the buyer</h1>
+  <p class="lede">Metanoia is a storefront for <b>agent&#8209;led subscription commerce</b>. You hand an AI agent a
+  spending <i>mandate</i> instead of your card. It shops a marketplace of API and software subscriptions, and
+  Juspay Hyperswitch settles the real payment in the sandbox. The agent proposes. Deterministic server code
+  decides and pays. Written by Aayush Shrestha.</p>
+
+  <h2><span class="n">1</span>The industry, and why I picked it</h2>
+  <div class="cols">
+    <div>
+      <p><b>Vertical: developer and SaaS subscriptions, bought by an agent.</b> I picked this because it is where
+      payments are about to change shape. The interesting question in US commerce is no longer how a human checks
+      out. It is <b>what happens when software does the buying.</b> Subscriptions are the ideal first surface. They
+      are recurring, priced, comparable, and machine&#8209;describable, with a price, a throughput number, an uptime
+      number, and feature flags. That is exactly what an agent can reason over and a deterministic ranker can score.</p>
+      <p><b>Why the US market shaped the choices.</b> US SaaS is card&#8209;first and mandate&#8209;friendly. The
+      Hyperswitch US connectors (Stripe, Adyen, Braintree) support <span class="mono">setup_future_usage</span> and
+      customer&#8209;acceptance mandates for off&#8209;session recurring, with no local&#8209;rail complexity such as
+      UPI or iDEAL to model. So the integration centers on <b>cards plus a saved&#8209;card mandate</b>, which is the
+      real US subscription pattern.</p>
+    </div>
+    <div>
+      <div class="callout">The thesis in one line:<br>the model <b>proposes</b>, the server <b>decides</b>,
+      Hyperswitch <b>settles</b>. An LLM can research and recommend. It can never set a price or move money.</div>
+      <p class="hand" style="margin-top:6px">Why an agent and a mandate together? Because an agent good enough to
+      buy for you is also good enough to be talked into overspending. So authority never lives in the model.</p>
+    </div>
+  </div>
+
+  <h2><span class="n">2</span>The flows this industry needs</h2>
+  <figure>
+    <svg viewBox="0 0 730 196" width="100%">
+      <g class="rough">
+        <rect class="dblue" x="6" y="20" rx="7" width="96" height="34"/>
+        <rect class="dbox" x="122" y="20" rx="7" width="92" height="34"/>
+        <rect class="dblue" x="234" y="20" rx="7" width="96" height="34"/>
+        <rect class="dgreen" x="352" y="8" rx="8" width="118" height="58"/>
+        <rect class="dbox" x="492" y="20" rx="7" width="78" height="34"/>
+        <rect class="dblue" x="590" y="20" rx="7" width="128" height="34"/>
+        <rect class="dgreen" x="590" y="96" rx="7" width="128" height="36"/>
+        <rect class="dred" x="590" y="150" rx="7" width="128" height="34" stroke-dasharray="4 3"/>
+        <rect class="dred" x="352" y="96" rx="7" width="118" height="30"/>
+        <rect class="dbox" x="352" y="140" rx="7" width="118" height="30"/>
+      </g>
+      <text class="dlbl" x="54" y="34" text-anchor="middle">Set mandate</text>
+      <text class="dlbl sm" x="54" y="45" text-anchor="middle" fill="#59596a">$60 / $40 / N</text>
+      <text class="dlbl" x="168" y="41" text-anchor="middle">Describe need</text>
+      <text class="dlbl" x="282" y="34" text-anchor="middle">Gemini</text>
+      <text class="dlbl sm" x="282" y="45" text-anchor="middle" fill="#59596a">proposes</text>
+      <text class="dlbl" x="411" y="30" text-anchor="middle" font-weight="600">Server decides</text>
+      <text class="dlbl sm" x="411" y="42" text-anchor="middle" fill="#59596a">rank + SpendGuard</text>
+      <text class="dlbl sm" x="411" y="53" text-anchor="middle" fill="#59596a">(owns the prices)</text>
+      <text class="dlbl" x="531" y="41" text-anchor="middle">Confirm</text>
+      <text class="dlbl" x="654" y="34" text-anchor="middle">Hyperswitch checkout</text>
+      <text class="dlbl sm" x="654" y="45" text-anchor="middle" fill="#59596a">CIT · card in iframe</text>
+      <text class="dlbl" x="654" y="110" text-anchor="middle">Receipt + proof</text>
+      <text class="dlbl sm" x="654" y="122" text-anchor="middle" fill="#59596a">capability 200 · live record</text>
+      <text class="dlbl" x="654" y="164" text-anchor="middle" fill="#c23b46">Off&#8209;session renewal</text>
+      <text class="dlbl sm" x="654" y="176" text-anchor="middle" fill="#c23b46">MIT · deferred</text>
+      <text class="dlbl sm" x="411" y="114" text-anchor="middle" fill="#c23b46">Denied: cap breach</text>
+      <text class="dlbl sm" x="411" y="158" text-anchor="middle" fill="#59596a">No&#8209;match: not carried</text>
+      <g>
+        <path class="arr" d="M102,37 L120,37"/><path class="arr" d="M214,37 L232,37"/>
+        <path class="arr" d="M330,37 L350,37"/><path class="arr" d="M470,37 L490,37"/>
+        <path class="arr" d="M570,37 L588,37"/>
+        <path class="arr" d="M654,54 L654,94"/>
+        <path class="arrd" d="M654,132 L654,148"/>
+        <path class="arrd" d="M411,66 L411,94"/>
+        <path class="arr" d="M411,126 L411,138"/>
+      </g>
+      <text class="dann" x="486" y="86" transform="rotate(-4 486 86)">only an eligible plan gets here &#8594;</text>
+    </svg>
+    <figcaption>Fig 1. End&#8209;to&#8209;end flow. Green is deterministic authority; red dashed is deferred or refused, where the card is never touched.</figcaption>
+  </figure>
+  <p>A subscription business needs a chain of flows, and here is where I focused. First, <b>discovery and
+  comparison.</b> Then <b>mandate&#8209;gated selection.</b> Then a <b>customer&#8209;initiated checkout (CIT).</b>
+  Then <b>proof that the thing works.</b> After that, <b>off&#8209;session recurring (MIT),</b> plus <b>webhooks and
+  reconciliation,</b> and finally <b>refunds and cancellation.</b> I built the spine from discovery through checkout
+  end to end against the live sandbox. Recurring and MIT are designed and coded, but connector&#8209;blocked (see
+  section 4).</p>
+
+  <div class="foot"><span>METANOIA · ARCHITECTURE &amp; DECISIONS</span><span>Aayush Shrestha · aashr3@morgan.edu</span><span>1 / 3</span></div>
+</div>
+
+<!-- ============ PAGE 2 ============ -->
+<div class="page">
+  <h2><span class="n">3</span>What I built, what I deferred, and why</h2>
+  <table>
+    <tr><th style="width:31%">Capability</th><th style="width:11%">State</th><th>Reasoning</th></tr>
+    <tr><td>Mandate, deterministic <b>decide()</b>, and <b>SpendGuard</b></td><td><span class="tag built">LIVE</span></td>
+      <td>A budget guarantee is only real if the server enforces it before any charge. An over&#8209;budget purchase is impossible through the app, and a refusal is a first&#8209;class, audited outcome.</td></tr>
+    <tr><td>Deterministic ranking over a 30&#8209;offer catalog (10 capabilities)</td><td><span class="tag built">LIVE</span></td>
+      <td>Scoring is reproducible and auditable, computed on server&#8209;owned numbers rather than model opinion. Same inputs give the same ranking.</td></tr>
+    <tr><td><b>CIT checkout</b> through Hyperswitch Unified Checkout (Fauxpay)</td><td><span class="tag built">LIVE</span></td>
+      <td>A real sandbox payment settles. The card is entered in Hyperswitch&rsquo;s iframe and never touches my server.</td></tr>
+    <tr><td>Capability proof and a <b>live payment record</b> on the receipt</td><td><span class="tag built">LIVE</span></td>
+      <td>After paying, an authenticated call returns 200, and I pull the real payment record from the Hyperswitch API, the same fields the dashboard shows. Nothing is faked.</td></tr>
+    <tr><td>Refunds, cancellation, resubscribe, and per&#8209;session isolation</td><td><span class="tag built">LIVE</span></td>
+      <td>Refunds are server&#8209;side, idempotent, and owned&#8209;only, verified by retrieval. Each browser is its own tenant.</td></tr>
+    <tr><td>Deployed on Cloud Run, Cloud SQL, Vertex, and Secret Manager</td><td><span class="tag built">LIVE</span></td>
+      <td>Hosted and sharable. Secrets live in Secret Manager, never in code.</td></tr>
+    <tr><td>Webhook <b>receiver</b> (HMAC verify, atomic settle)</td><td><span class="tag built">LIVE</span></td>
+      <td>A valid signature returns 200; a bad or missing one returns 401. Verified on the deployed endpoint.</td></tr>
+    <tr><td>Off&#8209;session <b>MIT</b> and saved&#8209;card recurring</td><td><span class="tag block">BLOCKED</span></td>
+      <td>Coded with setup_future_usage, customer_acceptance, and recurring_details. Routing the card to Stripe returns <span class="mono">UE_9000</span>, because the account needs raw&#8209;card API access, a Stripe&#8209;side grant. Fauxpay returns no reusable payment method. So MIT is proven in code, not yet in settlement.</td></tr>
+    <tr><td>Automatic renewal scheduler</td><td><span class="tag def">DEFERRED</span></td>
+      <td>Renewal is manual and on demand today, and it re&#8209;runs SpendGuard. A background scheduler is the next step once MIT clears.</td></tr>
+    <tr><td>Webhook <b>delivery</b> and settlement</td><td><span class="tag built">LIVE</span></td>
+      <td>Signed Hyperswitch <span class="mono">payment_succeeded</span> events reach an HMAC&#8209;verifying Vercel ingress, which forwards the untouched body to the Cloud Run receiver; Cloud Run verifies the HMAC again and settles the known payment in Cloud SQL (deduped by <span class="mono">event_id</span>, marked processed). Confirmed in the Vercel and Cloud Run logs and the <span class="mono">events</span> table. Direct <span class="mono">*.run.app</span> delivery does not land and the low&#8209;level transport reason is unconfirmed; unknown&#8209;payment events are retained, not dropped.</td></tr>
+    <tr><td>AP2 cryptographic mandate signatures, and x402</td><td><span class="tag def">DEFERRED</span></td>
+      <td>The AP2 Intent and Cart shapes are modeled and enforced app&#8209;side. Signed JWT mandates are on the roadmap.</td></tr>
+  </table>
+
+  <h2><span class="n">4</span>Integration and payment&#8209;method choices, with the reasoning</h2>
+  <div class="cols">
+    <div>
+      <p><b>Unified Checkout, not raw card fields.</b> The card is collected inside Hyperswitch&rsquo;s iframe, so
+      the PAN and CVV never touch my server and I stay outside PCI scope. My server only ever holds the
+      <b>publishable key</b> and a per&#8209;payment <span class="mono">client_secret</span>. The secret key stays
+      server&#8209;side.</p>
+      <p><b>Connectors are processors, not payment methods.</b> I never show Stripe, Adyen, or Fauxpay as a customer
+      choice. The customer picks a <i>card</i>, and routing to a processor is a server decision. For US
+      subscriptions the payment method that matters is a <b>card plus a saved&#8209;card mandate</b> for recurring.</p>
+      <p><b>Fauxpay for CIT, Stripe reserved for MIT.</b> Fauxpay is a reliable dummy connector, so checkout always
+      settles for a clean demo. Real off&#8209;session recurring needs a reusable
+      <span class="mono">payment_method_id</span>, which only a real connector such as Stripe&#8209;test returns. That
+      is why Stripe is wired for the mandate path.</p>
+    </div>
+    <div>
+      <p><b>Idempotency is a property of the payment id.</b> I mint
+      <span class="mono">pay_ = sha256(customer:plan:period)</span>, so a retry reuses the same intent instead of
+      charging twice. A duplicate&#8209;id error self&#8209;heals: it reuses a live intent, or mints a fresh id for a
+      dead one. Confirming twice records <i>one</i> subscription.</p>
+      <p><b>Webhooks: verify, then settle atomically.</b> I check the raw&#8209;body HMAC (SHA&#8209;512/256,
+      timing&#8209;safe), then run one DB transaction: dedupe by <span class="mono">event_id</span>, settle, upsert
+      the subscription, and issue the credential. Unknown&#8209;payment events are retained, never dropped, so
+      out&#8209;of&#8209;order delivery stays safe.</p>
+      <div class="callout" style="font-size:14px">US subscription integration is Unified Checkout for cards,
+      off&#8209;session mandates for recurring, stable&#8209;id idempotency, and signed webhooks as the source of truth.</div>
+    </div>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 730 150" width="100%">
+      <g class="rough">
+        <rect class="dblue" x="8" y="30" rx="9" width="210" height="104"/>
+        <rect class="dgreen" x="260" y="30" rx="9" width="210" height="104"/>
+        <rect class="dbox" x="512" y="30" rx="9" width="210" height="104" fill="#eef6f0" stroke="#1f8a54"/>
+      </g>
+      <text class="dlbl" x="113" y="20" text-anchor="middle" font-weight="600" fill="#2b56d6">MODEL PROPOSES</text>
+      <text class="dlbl" x="365" y="20" text-anchor="middle" font-weight="600" fill="#1f8a54">SERVER DECIDES</text>
+      <text class="dlbl" x="617" y="20" text-anchor="middle" font-weight="600">HYPERSWITCH SETTLES</text>
+      <text class="dlbl sm" x="113" y="58" text-anchor="middle">Gemini agent (3 tools,</text>
+      <text class="dlbl sm" x="113" y="70" text-anchor="middle">no payment tool)</text>
+      <text class="dlbl sm" x="113" y="90" text-anchor="middle">4 advisory scouts</text>
+      <text class="dlbl sm" x="113" y="110" text-anchor="middle" fill="#59596a">outputs a structured</text>
+      <text class="dlbl sm" x="113" y="121" text-anchor="middle" fill="#59596a">proposal only</text>
+      <text class="dlbl sm" x="365" y="58" text-anchor="middle">deterministic ranker</text>
+      <text class="dlbl sm" x="365" y="74" text-anchor="middle">plus SpendGuard (in order)</text>
+      <text class="dlbl sm" x="365" y="94" text-anchor="middle">owns catalog prices,</text>
+      <text class="dlbl sm" x="365" y="105" text-anchor="middle">re&#8209;checks at checkout</text>
+      <text class="dlbl sm" x="365" y="123" text-anchor="middle" fill="#1f8a54" font-weight="600">the only authority</text>
+      <text class="dlbl sm" x="617" y="62" text-anchor="middle">Unified Checkout (CIT)</text>
+      <text class="dlbl sm" x="617" y="80" text-anchor="middle">mandate charge (MIT)*</text>
+      <text class="dlbl sm" x="617" y="100" text-anchor="middle">signed webhooks</text>
+      <text class="dlbl sm" x="617" y="120" text-anchor="middle" fill="#59596a">real money</text>
+      <path class="arrb" d="M220,72 L258,72"/>
+      <text class="dann" x="239" y="64" text-anchor="middle" font-size="11">proposal</text>
+      <path class="arr" d="M472,72 L510,72"/>
+      <text class="dann g" x="491" y="64" text-anchor="middle" font-size="11">pay</text>
+      <text class="mono-s" x="617" y="146" text-anchor="middle">* MIT connector&#8209;blocked (UE_9000)</text>
+    </svg>
+    <figcaption>Fig 2. The authority boundary. A proposal is the only thing that crosses from model to server, and money only crosses from server to Hyperswitch. The LLM has no payment tool.</figcaption>
+  </figure>
+
+  <div class="foot"><span>METANOIA · ARCHITECTURE &amp; DECISIONS</span><span>github.com/theaayushstha1/metanoia</span><span>2 / 3</span></div>
+</div>
+
+<!-- ============ PAGE 3 ============ -->
+<div class="page">
+  <h2><span class="n">5</span>How the prototype fits together, end to end</h2>
+  <figure>
+    <svg viewBox="0 0 730 224" width="100%">
+      <g class="rough">
+        <rect class="dbox" x="8" y="6" rx="6" width="86" height="22"/>
+        <rect class="dblue" x="150" y="6" rx="6" width="104" height="22"/>
+        <rect class="dgreen" x="322" y="6" rx="6" width="96" height="22"/>
+        <rect class="dbox" x="486" y="6" rx="6" width="120" height="22" fill="#eef6f0" stroke="#1f8a54"/>
+        <rect class="dbox" x="642" y="6" rx="6" width="80" height="22"/>
+      </g>
+      <text class="dlbl sm" x="51" y="20" text-anchor="middle">Browser</text>
+      <text class="dlbl sm" x="202" y="20" text-anchor="middle">/create-payment</text>
+      <text class="dlbl sm" x="370" y="20" text-anchor="middle">SpendGuard</text>
+      <text class="dlbl sm" x="546" y="20" text-anchor="middle">Hyperswitch</text>
+      <text class="dlbl sm" x="682" y="20" text-anchor="middle">Store / DB</text>
+      <g stroke="#c9c6bc" stroke-width="1" stroke-dasharray="2 3">
+        <line x1="51" y1="30" x2="51" y2="214"/><line x1="202" y1="30" x2="202" y2="214"/>
+        <line x1="370" y1="30" x2="370" y2="214"/><line x1="546" y1="30" x2="546" y2="214"/>
+        <line x1="682" y1="30" x2="682" y2="214"/>
+      </g>
+      <g>
+        <path class="arr" d="M51,44 L200,44"/><text class="dlbl sm" x="120" y="40" text-anchor="middle">confirm(plan)</text>
+        <path class="arr" d="M202,60 L368,60"/><text class="dlbl sm" x="285" y="56" text-anchor="middle">evaluate(mandate)</text>
+        <path class="arrd" d="M368,76 L204,76"/><text class="dlbl sm" x="286" y="72" text-anchor="middle" fill="#c23b46">fail returns 403, stop</text>
+        <path class="arr" d="M202,96 L544,96"/><text class="dlbl sm" x="372" y="92" text-anchor="middle">POST /payments · confirm:false · stable id · setup_future_usage</text>
+        <path class="arr" d="M202,112 L680,112"/><text class="dlbl sm" x="440" y="108" text-anchor="middle">record pending attempt</text>
+        <path class="arrb" d="M51,132 L544,132"/><text class="dlbl sm" x="300" y="128" text-anchor="middle" fill="#2b56d6">Unified Checkout: card in iframe, then succeeded</text>
+        <path class="arr" d="M51,150 L544,150"/><text class="dlbl sm" x="300" y="146" text-anchor="middle">receipt: getPayment (authoritative)</text>
+        <path class="arr" d="M51,166 L680,166"/><text class="dlbl sm" x="360" y="162" text-anchor="middle">record subscription and issue scoped credential</text>
+        <path class="arr" d="M51,182 L680,182"/><text class="dlbl sm" x="360" y="178" text-anchor="middle">provider call returns 200 (capability proven)</text>
+        <path class="arr" d="M544,202 L684,202"/><text class="dlbl sm" x="612" y="198" text-anchor="middle" fill="#1f8a54">webhook via HMAC relay, re-verified at Cloud Run, settled in Cloud SQL</text>
+      </g>
+    </svg>
+    <figcaption>Fig 3. The customer&#8209;initiated payment sequence. SpendGuard runs again on the server before Hyperswitch is ever called.</figcaption>
+  </figure>
+
+  <div class="cols">
+    <div>
+      <p><b>The stack.</b> Next.js 16 (App Router) runs on <b>Cloud Run.</b> Gemini 3.1 Pro and 2.5 Flash run on
+      <b>Vertex AI</b> through the AI SDK tool loop. <b>Cloud SQL</b> Postgres is reached through the IAM connector,
+      with no public IP. Secrets live in <b>Secret Manager.</b> Juspay <b>Hyperswitch</b> settles in the sandbox. A
+      dual&#8209;backend <span class="mono">Store</span> (in&#8209;memory for dev and tests, Postgres in production)
+      makes correctness a database property: an idempotent <span class="mono">payment_id</span> primary key, one
+      credential per plan, and webhook <span class="mono">event_id</span> dedupe.</p>
+      <p><b>Safety and trust.</b> Untrusted input, meaning the request and public GitHub metadata, is wrapped and
+      labeled &ldquo;data, not instructions.&rdquo; The agent has no payment tool. The GitHub fetch is SSRF&#8209;guarded
+      and only accepts <span class="mono">github.com/owner/repo</span>. Preference memory lives in a separate,
+      consent&#8209;gated schema, never mixed with payments.</p>
+    </div>
+    <div>
+      <div class="callout" style="font-size:14.5px; margin-top:0">If a reviewer trusts one thing, trust this: the
+      number that gets charged is computed by deterministic, unit&#8209;tested server code, on data the model never
+      authored.</div>
+      <p><b>How I would finish it.</b> First, get raw&#8209;card API access on the Stripe test account, or self&#8209;host
+      Hyperswitch, to unblock the reusable <span class="mono">payment_method_id</span> and prove off&#8209;session
+      MIT. Second, add the renewal scheduler on top of the already&#8209;tested, pending&#8209;first, idempotent renewal
+      path, now that the webhook settlement loop is closed. Third, sign the AP2 Intent and Cart mandates.</p>
+      <p class="hand" style="color:#1f8a54">91 tests green. Type&#8209;check and lint clean. A real sandbox payment
+      completes end to end on the live URL.</p>
+    </div>
+  </div>
+
+  <div class="foot"><span>METANOIA · ARCHITECTURE &amp; DECISIONS</span><span>Live: metanoia-37848252863.us-east1.run.app</span><span>3 / 3</span></div>
+</div>
+
+</body>
+</html>
