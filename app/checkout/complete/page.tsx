@@ -47,38 +47,46 @@ export default async function CompletePage({
   let amountCents: number | undefined;
   let verifyError: string | null = null;
   let payment: PaymentResponse | null = null;
+  let notOwned = false;
   const sessionCustomer = await getSessionCustomerId();
 
   if (payment_id) {
     try {
       const p = await getPayment(payment_id);
-      payment = p;
-      status = p.status;
-      connector = p.connector;
-      amountCents = p.amount;
-      if (p.status === "succeeded") {
-        const existingAttempt = await getAttempt(payment_id);
-        if (!existingAttempt) {
-          const recoveredPlan = planFromPayment(p);
-          const customerId = typeof p.customer_id === "string" ? p.customer_id : undefined;
-          if (recoveredPlan && customerId === sessionCustomer) {
-            await recordAttempt({
-              paymentId: payment_id,
-              customerId,
-              planId: recoveredPlan.id,
-              amountCents: p.amount,
-            });
+      const customerId = typeof p.customer_id === "string" ? p.customer_id : undefined;
+      // Same ownership rule the refund and lab routes enforce: never settle or render a
+      // payment this browser session does not own. The retrieved payment is authoritative —
+      // it carries the customer it was created under. Gate BEFORE settling or rendering.
+      if (!customerId || customerId !== sessionCustomer) {
+        notOwned = true;
+      } else {
+        payment = p;
+        status = p.status;
+        connector = p.connector;
+        amountCents = p.amount;
+        if (p.status === "succeeded") {
+          const existingAttempt = await getAttempt(payment_id);
+          if (!existingAttempt) {
+            const recoveredPlan = planFromPayment(p);
+            if (recoveredPlan) {
+              await recordAttempt({
+                paymentId: payment_id,
+                customerId,
+                planId: recoveredPlan.id,
+                amountCents: p.amount,
+              });
+            }
           }
+          await confirmPaid(payment_id, { paymentMethodId: p.payment_method_id });
         }
-        await confirmPaid(payment_id, { paymentMethodId: p.payment_method_id });
       }
     } catch (e) {
       verifyError = e instanceof Error ? e.message : "Could not verify payment";
     }
   }
 
-  const ok = status === "succeeded";
-  const attempt = payment_id ? await getAttempt(payment_id) : undefined;
+  const ok = status === "succeeded" && !notOwned;
+  const attempt = ok && payment_id ? await getAttempt(payment_id) : undefined;
   const plan = attempt ? getPlan(attempt.planId) : undefined;
   const credential = plan ? await getCredential(sessionCustomer, plan.id) : undefined;
   const savedPm = plan ? await getSavedPaymentMethod(sessionCustomer, plan.id) : undefined;
@@ -127,7 +135,7 @@ export default async function CompletePage({
                 <LiveDot /> SUBSCRIPTION ACTIVE
               </Pill>
             ) : (
-              <Pill>{status ? status.toUpperCase() : "NO PAYMENT"}</Pill>
+              <Pill>{notOwned ? "NOT FOUND" : status ? status.toUpperCase() : "NO PAYMENT"}</Pill>
             )
           }
         />
@@ -135,14 +143,23 @@ export default async function CompletePage({
         {!ok ? (
           <div style={{ padding: "80px 64px", textAlign: "center" }}>
             <div style={{ fontFamily: disp, fontWeight: 800, fontSize: 40 }}>
-              {payment_id ? `Payment ${status ?? "unverified"}` : "No payment to verify"}
+              {notOwned
+                ? "No payment for this session"
+                : payment_id
+                  ? `Payment ${status ?? "unverified"}`
+                  : "No payment to verify"}
             </div>
-            {payment_id && (
+            {notOwned && (
+              <p className="font-mono" style={{ marginTop: 10, fontSize: 12, color: "var(--faint)" }}>
+                This payment is not associated with your browser session.
+              </p>
+            )}
+            {payment_id && !notOwned && (
               <p className="font-mono" style={{ marginTop: 10, fontSize: 12, color: "var(--faint)" }}>
                 {payment_id}
               </p>
             )}
-            {verifyError && (
+            {verifyError && !notOwned && (
               <p className="font-mono" style={{ marginTop: 10, fontSize: 12, color: "var(--red)" }}>
                 {verifyError}
               </p>
