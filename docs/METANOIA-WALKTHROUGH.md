@@ -444,8 +444,9 @@ search, and the vendors are not real companies you can actually subscribe to.
 
 Source: `lib/catalog.ts`.
 
-- **18 offers** across **6 capabilities** (3 competing vendors each): `market-data`, `news`, `vector-search`,
-  `geocoding`, `compute`, `transcription`.
+- **30 offers** across **10 capabilities** (3 competing vendors each): `market-data`, `news`, `vector-search`,
+  `geocoding`, `compute`, `transcription`, `llm-inference`, `transactional-email`, `observability`,
+  `authentication`. Counts are derived from the catalog (`catalogStats()`), not hardcoded.
 - Each `Plan` has: `id`, `name`, `vendor`, `capability`, `category`, `priceCents`, `billing: monthly`,
   `features[]`, `maxRps?`, `uptimePct?`, `blurb`, `bestFor`, `resource` (the internal provider endpoint).
 - Prices are integer **cents** everywhere (no floats).
@@ -670,7 +671,7 @@ Source: `app/Workbench.tsx`, `app/checkout/*`, `app/components/ui.tsx`, `app/Mem
 | `lib/agent/scouts.ts` | Four parallel advisory scouts (3 catalog + 1 grounded market). |
 | `lib/agent/spendCap.ts` | SpendGuard: the Spending Constitution evaluator. |
 | `lib/ap2/mandate.ts` | AP2 mandate/cart shapes + the policy extension. |
-| `lib/catalog.ts` | 18-offer sandbox marketplace + deterministic search. |
+| `lib/catalog.ts` | 30-offer sandbox marketplace + deterministic search. |
 | `lib/checkout.ts` | Enforcement seam: initiate, confirm, evaluateRenewal, renew. |
 | `lib/hyperswitch.ts` | Server Hyperswitch client (intent, MIT charge, get, stable id, self-heal). |
 | `lib/profile/context.ts` | Bounded public GitHub import + untrusted-context prompt. |

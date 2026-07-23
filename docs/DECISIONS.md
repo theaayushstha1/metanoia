@@ -37,7 +37,7 @@ Hyperswitch is contacted. A refusal is a first-class outcome with a visible audi
 ## ADR-004 — Curated sandbox catalog with fictional vendors
 **Context.** Hyperswitch settles for *onboarded merchants*, not arbitrary URLs; deterministic scoring needs
 structured, comparable attributes.
-**Decision.** An 18-offer curated marketplace of **fictional** vendors across six capabilities.
+**Decision.** A 30-offer curated marketplace of **fictional** vendors across ten capabilities.
 **Rejected.** Live web/product discovery; renaming vendors to real brands (Deepgram, etc.).
 **Consequences.** Honest about what "buy" means; fewer/fake names — mitigated by the grounded Market scout, which
 surfaces real products as `external_research` only. **[LIVE-VERIFIED]**.

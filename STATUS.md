@@ -42,8 +42,12 @@ not scrape those services. Production profile import requires OAuth and user con
   shortlist through distinct lenses in parallel. Advisory only; the deterministic ranker and
   SpendGuard remain the sole decision and payment gate. Each report carries a `scope`
   (onboarded_catalog vs external_research).
-- Marketplace: 18 sandbox offers - three comparable vendors in each of six capabilities (market
-  data, news, vector search, geocoding, GPU compute, transcription).
+- Marketplace: 30 sandbox offers - three comparable vendors (budget/balanced/premium) in each of ten
+  capabilities: market data, news, vector search, geocoding, GPU compute, transcription, LLM inference,
+  transactional email, observability, and authentication. Counts are derived from the catalog
+  (`catalogStats()`), never hardcoded. The result screen separates PURCHASABLE SANDBOX OFFERS from
+  research-only REAL-MARKET REFERENCES, and a Decision Authority panel shows model-proposed vs
+  server-final with any SERVER OVERRIDE reason and the real ranking score parts.
 - Checkout: embedded Hyperswitch Unified Checkout; server-side secret; stable payment IDs;
   duplicate creates recover the existing intent; checkout metadata carries plan_id for recovery.
 - Payment proof: fresh Fauxpay sandbox CIT observed at `succeeded` (connector fauxpay); stable ID honored.
@@ -65,8 +69,10 @@ not scrape those services. Production profile import requires OAuth and user con
 
 - `npx tsc --noEmit` - passes.
 - `npm run lint` - passes with zero warnings.
-- `npm test` - 40/40 tests pass across spend policy, ranking, profile import, procurement, scouts,
-  checkout, idempotency, renewal, and preference memory.
+- `npm test` - 82/82 tests pass across 16 files: spend policy, ranking, profile import, procurement,
+  scouts, checkout, idempotency, renewal, preference memory, webhook reconciliation, refunds, session
+  ownership, editable mandate bounds, the catalog expansion (category recognition, ranking, mandate
+  refusal, refinement), and decision-authority override rendering.
 - End-to-end (headless, this audit): procurement (4 scouts) -> selection -> Fauxpay checkout ->
   `confirm` at `succeeded` -> receipt issues the scoped credential -> authenticated provider call
   returns `200`. Invalid and missing credentials return `401`.

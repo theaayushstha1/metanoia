@@ -110,6 +110,44 @@ function sample(plan: Plan): unknown {
     }
     case "transcription":
       return { text: "Your appointment is confirmed for Tuesday at 3 PM.", confidence: 0.98, words: 8, as_of: now };
+    case "llm-inference": {
+      const inTok = 40 + (hash(now.slice(0, 16)) % 60);
+      return {
+        model: "sandbox-llm-" + plan.id,
+        output: "Metanoia lets an agent spend under a mandate the server enforces.",
+        tokens_in: inTok,
+        tokens_out: 14,
+        finish_reason: "stop",
+        as_of: now,
+      };
+    }
+    case "transactional-email":
+      return {
+        message_id: "msg_" + hash(plan.id + now.slice(0, 15)).toString(16).slice(0, 12),
+        to: "user@example.com",
+        template: "welcome",
+        status: "delivered",
+        as_of: now,
+      };
+    case "observability": {
+      const seed = hash(now.slice(0, 16));
+      return {
+        logs_ingested_last_min: 900 + (seed % 400),
+        traces_last_min: 30 + (seed % 40),
+        open_alerts: seed % 3,
+        retention_days: plan.id === "vigil_scale" ? 365 : plan.features.includes("retention") ? 30 : 7,
+        as_of: now,
+      };
+    }
+    case "authentication":
+      return {
+        session_id: "sess_" + hash(plan.id + now.slice(0, 15)).toString(16).slice(0, 12),
+        user: "usr_9f3a",
+        methods: plan.features.filter((f) => ["passkeys", "mfa", "social_login", "sso"].includes(f)),
+        token_type: "bearer",
+        expires_in: 3600,
+        as_of: now,
+      };
     default:
       return { ok: true, as_of: now };
   }

@@ -30,7 +30,9 @@ describe("scout report safety", () => {
     expect(report.winner_plan_id).toBeNull();
     expect(report.ranked_plan_ids).toEqual([]);
     expect(report.observations).toEqual([]);
-    expect(report.external_signals).toHaveLength(1);
+    // Structured market references come from the market scout's own submit, never from
+    // sanitize; sanitize never fabricates external references.
+    expect(report.external_signals).toEqual([]);
     expect(report.sources).toHaveLength(1);
   });
 });

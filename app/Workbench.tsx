@@ -5,6 +5,7 @@ import Link from "next/link";
 import MemoryPanel from "./MemoryPanel";
 import { useRouter } from "next/navigation";
 import { Icon, Mark, Pill, LiveDot, TopBar, usd } from "./components/ui";
+import { catalogStats } from "@/lib/catalog";
 
 /* ── types (mirror /api/agent/plan) ───────────────────────────────────── */
 interface Candidate {
@@ -80,7 +81,7 @@ interface ScoutReport {
   headline: string;
   summary: string;
   observations: { plan_id: string; score: number; evidence: string; concern: string | null }[];
-  external_signals: { provider: string; signal: string }[];
+  external_signals: { provider: string; claim: string; source_url: string | null; official: boolean }[];
   sources: { title: string; url: string }[];
 }
 interface Result {
@@ -112,6 +113,10 @@ const PRESETS: Record<string, string> = {
   "market-data":
     "Find the best market-data API: real-time US equities, websockets, ≥60 req/s, under $50/month.",
   news: "I need a news API with LLM summaries, under $20/month.",
+  llm: "Find an LLM inference API with tool calling and long context, under $40/month.",
+  email: "I need a transactional email API with delivery webhooks and analytics, under $30/month.",
+  auth: "I need passkey authentication with MFA and social login, under $40/month.",
+  observability: "Find an observability API for logs and distributed traces with 30-day retention.",
   transcription: "Find me the best transcription (speech-to-text) service for $10 a month.",
   "over-budget": "Get me an A100 GPU compute API for large-model training. A100 is a hard requirement.",
 };
@@ -308,7 +313,7 @@ function Processing() {
   // signal is the indeterminate motion below; the real trace shows after completion.
   const steps = [
     { t: "Reads your request", d: "extracting hard requirements" },
-    { t: "Scans the marketplace", d: "18 curated offers" },
+    { t: "Scans the marketplace", d: `${catalogStats().offers} curated offers` },
     { t: "Compares offers", d: "price · throughput · reliability" },
     { t: "Checks your mandate", d: "SpendGuard, in order" },
     { t: "Finalizes the pick", d: "assembling the proposal" },
@@ -608,11 +613,17 @@ function Home({
                   <PresetChip active label="market-data" onClick={() => setRequest(PRESETS["market-data"])}>
                     <Icon.candles size={12} color={blue} />
                   </PresetChip>
-                  <PresetChip label="news" onClick={() => setRequest(PRESETS["news"])}>
+                  <PresetChip label="LLM" onClick={() => setRequest(PRESETS["llm"])}>
+                    <Icon.sparkle size={12} />
+                  </PresetChip>
+                  <PresetChip label="email" onClick={() => setRequest(PRESETS["email"])}>
                     <Icon.news size={12} />
                   </PresetChip>
-                  <PresetChip label="transcription" onClick={() => setRequest(PRESETS["transcription"])}>
-                    <Icon.sparkle size={12} />
+                  <PresetChip label="auth" onClick={() => setRequest(PRESETS["auth"])}>
+                    <Icon.lock size={12} />
+                  </PresetChip>
+                  <PresetChip label="observability" onClick={() => setRequest(PRESETS["observability"])}>
+                    <Icon.nodes size={12} />
                   </PresetChip>
                   <PresetChip label="over-budget" onClick={() => setRequest(PRESETS["over-budget"])}>
                     <Icon.grid size={12} />
@@ -1236,9 +1247,13 @@ function AgentResult({
 
       {/* main */}
       <div className="mn-result-main" style={{ padding: "26px 30px 30px" }}>
-        <div className="font-mono" style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".16em", color: "var(--muted)", marginBottom: 14 }}>
-          {result.candidates.length} OFFERS COMPARED
+        <DecisionAuthority decision={d} candidates={result.candidates} />
+        <div className="font-mono" style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".16em", color: "var(--muted)", margin: "24px 0 5px" }}>
+          PURCHASABLE SANDBOX OFFERS · {result.candidates.length} COMPARED
         </div>
+        <p className="font-mono" style={{ margin: "0 0 12px", fontSize: 10.5, color: "var(--faint)" }}>
+          Fictional onboarded vendors · deterministically ranked · eligible for Hyperswitch sandbox checkout
+        </p>
         <div className="mn-offers-scroll" style={{ border: "1px solid var(--line-3)", borderRadius: 12, overflow: "auto" }}>
           <div
             className="font-mono"
@@ -1269,6 +1284,8 @@ function AgentResult({
         </div>
 
         <ScoutPanel scouts={result.scouts ?? []} candidates={result.candidates} />
+
+        <MarketReferences scouts={result.scouts ?? []} />
 
         <div className="mn-result-cards" style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 16, marginTop: 16 }}>
           {/* the pick */}
@@ -1362,6 +1379,191 @@ function AgentResult({
   );
 }
 
+/**
+ * Decision Authority — shows WHO decided what. The model extracts requirements
+ * (not deterministic); everything after is deterministic server code. Renders the
+ * model's proposal vs the server's final pick, any override + reason, and the real
+ * score parts. No fabricated trace: every value comes from the decision/candidates.
+ */
+function DecisionAuthority({ decision, candidates }: { decision: Decision; candidates: Candidate[] }) {
+  const nameOf = (id?: string | null) => (id ? candidates.find((c) => c.id === id)?.name ?? id : null);
+  const modelId = decision.model_selected_plan_id ?? null;
+  const serverId = decision.selected_plan_id ?? null;
+  const modelName = nameOf(modelId);
+  const serverName = nameOf(serverId);
+  // The server overrode the model if the model proposed a plan and the server chose a
+  // different one (or rejected it entirely).
+  const overrode = Boolean(modelId) && modelId !== serverId;
+  const selected = candidates.find((c) => c.id === (serverId ?? modelId));
+  const parts = selected?.score_parts;
+  const partRows = parts
+    ? ([
+        ["Capability fit", parts.capabilityFit],
+        ["Price efficiency", parts.priceEfficiency],
+        ["Reliability", parts.reliability],
+        ["Throughput", parts.throughput],
+      ] as [string, number][])
+    : [];
+  const total = partRows.reduce((s, [, v]) => s + v, 0);
+  const steps = [
+    "Gemini extracted the requirements",
+    "Four scouts gave advisory opinions",
+    "Server ranking calculated the scores",
+    "SpendGuard checked the mandate",
+    "Deterministic server code made the final selection",
+  ];
+
+  return (
+    <section style={{ border: "1px solid var(--accent-line)", borderRadius: 12, overflow: "hidden", background: "linear-gradient(180deg,#f4f8ff,#fff)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "12px 18px", borderBottom: "1px solid var(--line-2)" }}>
+        <Icon.shieldCheck size={14} color={blue} />
+        <span className="font-mono" style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".14em" }}>DECISION AUTHORITY</span>
+        <span style={{ marginLeft: "auto" }}><Pill tone="blue">SERVER DECIDES</Pill></span>
+      </div>
+      <div style={{ padding: "16px 18px 18px" }}>
+        <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.55, color: "var(--muted)" }}>
+          Gemini extracts the requirements and the four scouts stay advisory and probabilistic. Everything that
+          decides — the catalog values, the ranking math, SpendGuard mandate enforcement, and the final
+          authorization — is deterministic server code.
+        </p>
+
+        <div className="mn-authority-steps" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
+          {steps.map((s, i) => {
+            const probabilistic = i <= 1; // requirements extraction + scouts are model calls
+            return (
+              <span key={i} className="font-mono" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, color: probabilistic ? "var(--muted)" : "var(--ink)", background: "#fff", border: "1px solid var(--line-2)", borderRadius: 99, padding: "5px 10px" }}>
+                <span style={{ fontWeight: 700, color: probabilistic ? "var(--faint)" : blue }}>{i + 1}</span>
+                {s}
+                {probabilistic && <span style={{ color: "var(--faint)" }}>({i === 0 ? "model" : "advisory"})</span>}
+              </span>
+            );
+          })}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
+          <div style={{ border: "1px solid var(--line-2)", borderRadius: 10, padding: "12px 14px", background: "#fff" }}>
+            <div className="font-mono" style={{ fontSize: 9.5, letterSpacing: ".1em", color: "var(--faint)" }}>MODEL PROPOSED</div>
+            <div className="font-body" style={{ fontSize: 15, fontWeight: 700, marginTop: 3 }}>{modelName ?? "no selection"}</div>
+          </div>
+          <div style={{ border: `1px solid ${overrode ? "var(--red-2)" : "var(--accent-line)"}`, borderRadius: 10, padding: "12px 14px", background: "#fff" }}>
+            <div className="font-mono" style={{ fontSize: 9.5, letterSpacing: ".1em", color: "var(--faint)" }}>SERVER FINAL</div>
+            <div className="font-body" style={{ fontSize: 15, fontWeight: 700, marginTop: 3, color: serverName ? "var(--ink)" : "var(--red)" }}>
+              {serverName ?? "refused — no compliant plan"}
+            </div>
+          </div>
+        </div>
+
+        {overrode && (
+          <div style={{ marginTop: 10, display: "flex", alignItems: "flex-start", gap: 9, border: "1px solid var(--red-2)", background: "var(--red-bg)", borderRadius: 10, padding: "11px 14px" }}>
+            <span className="font-mono" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", color: "var(--red)", background: "#fff", border: "1px solid var(--red-2)", borderRadius: 99, padding: "3px 9px", flex: "none" }}>SERVER OVERRIDE</span>
+            <span style={{ fontSize: 11.5, lineHeight: 1.5, color: "var(--ink)" }}>{decision.note ?? "The server chose a different plan than the model."}</span>
+          </div>
+        )}
+
+        {partRows.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div className="font-mono" style={{ fontSize: 9.5, letterSpacing: ".1em", color: "var(--faint)", marginBottom: 8 }}>
+              RANKING FORMULA · {selected?.name} · {total}/100
+            </div>
+            <div style={{ display: "grid", gap: 7 }}>
+              {partRows.map(([label, v]) => (
+                <div key={label} style={{ display: "grid", gridTemplateColumns: "120px 1fr 30px", alignItems: "center", gap: 10 }}>
+                  <span className="font-mono" style={{ fontSize: 10.5, color: "var(--muted)" }}>{label}</span>
+                  <span style={{ height: 8, background: "#e7edf9", borderRadius: 4, overflow: "hidden" }}>
+                    <span style={{ display: "block", height: "100%", width: `${Math.min(100, v)}%`, background: "linear-gradient(90deg,#4d8cff,#2b6bf3)", borderRadius: 4 }} />
+                  </span>
+                  <span className="font-mono" style={{ fontSize: 10.5, fontWeight: 700, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Real-market references — the Market scout's grounded external findings, kept fully
+ * separate from purchasable offers. Research-only, never selectable, no checkout, and
+ * "not verified" when no source backs a signal. Never invents pricing or features.
+ */
+function MarketReferences({ scouts }: { scouts: ScoutReport[] }) {
+  const market = scouts.find((s) => s.scope === "external_research" || s.lens === "market");
+  if (!market || market.status !== "complete") return null;
+  const researchedOn = new Date().toISOString().slice(0, 10);
+  const refs = market.external_signals ?? [];
+  const grounding = market.sources ?? [];
+  const hostOf = (u: string) => {
+    try {
+      return new URL(u).host.replace(/^www\./, "");
+    } catch {
+      return u;
+    }
+  };
+
+  return (
+    <section style={{ marginTop: 16, border: "1px dashed var(--line-3)", borderRadius: 8, overflow: "hidden", background: "var(--panel)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "12px 16px", borderBottom: "1px solid var(--line-2)" }}>
+        <Icon.news size={14} color="#b8862b" />
+        <span className="font-mono" style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".14em" }}>REAL-MARKET REFERENCES</span>
+        <span className="font-mono" style={{ marginLeft: "auto", fontSize: 9, fontWeight: 700, letterSpacing: ".06em", color: "#b8862b", background: "#fff", border: "1px solid #e6cf9a", borderRadius: 99, padding: "4px 10px" }}>
+          RESEARCH ONLY · NOT PURCHASABLE
+        </span>
+      </div>
+      <div style={{ padding: "12px 16px 16px" }}>
+        <p className="font-mono" style={{ margin: "0 0 12px", fontSize: 10.5, lineHeight: 1.5, color: "var(--muted)" }}>
+          Real companies surfaced by the Market scout. Each claim is tied to its own source. Not onboarded, not settleable through Hyperswitch, and never selectable here.
+        </p>
+        {refs.length > 0 ? (
+          <div style={{ display: "grid", gap: 10 }}>
+            {refs.map((ref, i) => (
+              <div key={i} style={{ border: "1px solid var(--line-2)", borderRadius: 10, background: "#fff", padding: "12px 14px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span className="font-body" style={{ fontSize: 13.5, fontWeight: 700 }}>{ref.provider}</span>
+                  {ref.official && (
+                    <span className="font-mono" style={{ fontSize: 8, fontWeight: 700, letterSpacing: ".06em", color: "var(--green)", background: "var(--green-bg)", borderRadius: 99, padding: "2px 7px" }}>OFFICIAL SOURCE</span>
+                  )}
+                  <span className="font-mono" style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: ".06em", color: "#b8862b", background: "#fbf3e0", border: "1px solid #e6cf9a", borderRadius: 99, padding: "2px 7px" }}>
+                    RESEARCH ONLY
+                  </span>
+                </div>
+                <p style={{ margin: "6px 0 0", fontSize: 12, lineHeight: 1.5, color: "var(--muted)" }}>{ref.claim}</p>
+                <div className="font-mono" style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 9, fontSize: 9.5, color: "var(--faint)", flexWrap: "wrap" }}>
+                  {ref.source_url ? (
+                    <a href={ref.source_url} target="_blank" rel="noreferrer" style={{ color: blue, textDecoration: "none" }}>{hostOf(ref.source_url)}</a>
+                  ) : (
+                    <span style={{ color: "var(--red)" }}>NOT VERIFIED · no source</span>
+                  )}
+                  <span style={{ marginLeft: "auto" }}>RESEARCHED {researchedOn}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : market.summary ? (
+          <div style={{ border: "1px solid var(--line-2)", borderRadius: 10, background: "#fff", padding: "12px 14px" }}>
+            <div className="font-mono" style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: ".06em", color: "#b8862b" }}>GROUNDED MARKET SCAN</div>
+            <p style={{ margin: "6px 0 0", fontSize: 12, lineHeight: 1.55, color: "var(--muted)" }}>{market.summary}</p>
+            <p className="font-mono" style={{ margin: "8px 0 0", fontSize: 9, color: "var(--faint)" }}>Pooled grounding sources below; not tied to a single claim.</p>
+            <div className="font-mono" style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 6, fontSize: 9.5, color: "var(--faint)", flexWrap: "wrap" }}>
+              {grounding.length > 0 ? (
+                grounding.slice(0, 3).map((src, j) => (
+                  <a key={j} href={src.url} target="_blank" rel="noreferrer" style={{ color: blue, textDecoration: "none" }}>{src.title || hostOf(src.url)}</a>
+                ))
+              ) : (
+                <span style={{ color: "var(--red)" }}>NOT VERIFIED · no source</span>
+              )}
+              <span style={{ marginLeft: "auto" }}>RESEARCHED {researchedOn}</span>
+            </div>
+          </div>
+        ) : (
+          <p className="font-mono" style={{ margin: 0, fontSize: 11, color: "var(--faint)" }}>No external references returned for this request.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function ScoutPanel({ scouts, candidates }: { scouts: ScoutReport[]; candidates: Candidate[] }) {
   if (!scouts.length) return null;
   const candidateNames = new Map(candidates.map((candidate) => [candidate.id, candidate.name]));
@@ -1406,21 +1608,21 @@ function ScoutPanel({ scouts, candidates }: { scouts: ScoutReport[]; candidates:
               <p style={{ margin: "9px 0 0", fontSize: 11.5, lineHeight: 1.5, color: "var(--muted)" }}>
                 {winnerObservation?.evidence ?? scout.summary}
               </p>
-              {scout.external_signals.slice(0, 2).map((signal) => (
-                <div key={signal.provider} style={{ marginTop: 9, paddingTop: 9, borderTop: "1px solid var(--line-2)" }}>
-                  <strong style={{ display: "block", fontSize: 11.5 }}>{signal.provider}</strong>
-                  <span style={{ display: "block", marginTop: 2, fontSize: 10.5, lineHeight: 1.4, color: "var(--muted)" }}>{signal.signal}</span>
+              {scout.external_signals.slice(0, 2).map((ref, refIndex) => (
+                <div key={`${ref.provider}-${refIndex}`} style={{ marginTop: 9, paddingTop: 9, borderTop: "1px solid var(--line-2)" }}>
+                  <strong style={{ display: "block", fontSize: 11.5 }}>{ref.provider}</strong>
+                  <span style={{ display: "block", marginTop: 2, fontSize: 10.5, lineHeight: 1.4, color: "var(--muted)" }}>{ref.claim}</span>
+                  <span className="font-mono" style={{ display: "block", marginTop: 4, fontSize: 8.5 }}>
+                    {ref.source_url ? (
+                      <a href={ref.source_url} target="_blank" rel="noreferrer" style={{ color: blue }}>
+                        {ref.official ? "OFFICIAL SOURCE" : "SOURCE"}
+                      </a>
+                    ) : (
+                      <span style={{ color: "var(--red)" }}>NOT VERIFIED</span>
+                    )}
+                  </span>
                 </div>
               ))}
-              {scout.sources.length > 0 && (
-                <div className="font-mono" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10, fontSize: 9 }}>
-                  {scout.sources.slice(0, 3).map((source, sourceIndex) => (
-                    <a key={source.url} href={source.url} target="_blank" rel="noreferrer" style={{ color: blue }} title={source.title}>
-                      SOURCE {sourceIndex + 1}
-                    </a>
-                  ))}
-                </div>
-              )}
               <div className="font-mono" style={{ marginTop: 11, fontSize: 8.5, color: "var(--faint)", letterSpacing: ".06em" }}>
                 {scout.scope === "external_research" ? "RESEARCH ONLY · NOT ONBOARDED" : "ONBOARDED CATALOG"}
               </div>

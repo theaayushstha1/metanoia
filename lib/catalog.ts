@@ -11,13 +11,59 @@
  * agent actually has offers to compare.
  */
 
-export type Capability =
-  | "market-data"
-  | "news"
-  | "vector-search"
-  | "geocoding"
-  | "compute"
-  | "transcription";
+/** Single source of truth for capability keys (Zod enums + types derive from this). */
+export const CAPABILITIES = [
+  "market-data",
+  "news",
+  "vector-search",
+  "geocoding",
+  "compute",
+  "transcription",
+  "llm-inference",
+  "transactional-email",
+  "observability",
+  "authentication",
+] as const;
+
+export type Capability = (typeof CAPABILITIES)[number];
+
+/** Display label + natural-language keywords per capability (drives inferCapability + UI). */
+export const CAPABILITY_META: Record<Capability, { label: string; keywords: string[] }> = {
+  "market-data": { label: "Market data", keywords: ["market data", "stock price", "stock quote", "equit", "ticker", "trading data"] },
+  news: { label: "News", keywords: ["news", "headline", "articles", "press"] },
+  "vector-search": { label: "Vector search", keywords: ["vector", "embedding", "semantic search", "retrieval", "rag"] },
+  geocoding: { label: "Geocoding", keywords: ["geocod", "geocode", "address", "lat", "lng", "maps", "location"] },
+  compute: { label: "GPU compute", keywords: ["gpu", "compute", "a100", "inference server", "training", "cuda"] },
+  transcription: { label: "Transcription", keywords: ["transcri", "speech", "speech-to-text", "captions", "audio to text", "diarization"] },
+  "llm-inference": { label: "LLM inference", keywords: ["llm", "language model", "chat completion", "completion", "gpt", "tool calling", "long context", "inference api", "generate text"] },
+  "transactional-email": { label: "Transactional email", keywords: ["email", "transactional email", "smtp", "send mail", "deliverability", "email api"] },
+  observability: { label: "Observability", keywords: ["observability", "logs", "logging", "tracing", "traces", "metrics", "monitoring", "alerts", "telemetry"] },
+  authentication: { label: "Authentication", keywords: ["auth", "authentication", "login", "sign in", "passkey", "passwordless", "webauthn", "mfa", "2fa", "sso", "oauth", "social login"] },
+};
+
+/**
+ * Deterministic keyword mapping from a natural-language request to a capability.
+ * The Gemini agent still makes the real inference against list_services; this is a
+ * testable aid and a prompt hint so requests like "I need passkey authentication"
+ * or "find an email API" reliably land on the right category.
+ */
+export function inferCapability(text: string): Capability | null {
+  const t = text.toLowerCase();
+  // Most-SPECIFIC match wins: prefer the longest matching keyword, break ties by
+  // earliest position. This avoids a short generic word (e.g. "location") beating a
+  // more distinctive one (e.g. "authentication") just because it appears first.
+  let best: { cap: Capability; len: number; at: number } | null = null;
+  for (const cap of CAPABILITIES) {
+    for (const kw of CAPABILITY_META[cap].keywords) {
+      const at = t.indexOf(kw);
+      if (at < 0) continue;
+      if (best === null || kw.length > best.len || (kw.length === best.len && at < best.at)) {
+        best = { cap, len: kw.length, at };
+      }
+    }
+  }
+  return best?.cap ?? null;
+}
 
 export interface Plan {
   id: string;
@@ -318,10 +364,199 @@ export const CATALOG: Plan[] = [
     bestFor: "Production media pipelines that need precise timing",
     resource: "/api/provider/transcribe_ultra",
   },
+  // --- llm-inference: three competing offers ---
+  {
+    id: "nano_chat",
+    name: "Nano Chat",
+    vendor: "Featherlabs",
+    capability: "llm-inference",
+    category: "LLM inference API",
+    priceCents: 1200,
+    billing: "monthly",
+    features: ["streaming"],
+    maxRps: 40,
+    uptimePct: 99.5,
+    blurb: "Small fast model with token streaming. No tool calls.",
+    bestFor: "High-volume classification and simple chat on a budget",
+    resource: "/api/provider/nano_chat",
+  },
+  {
+    id: "relay_llm",
+    name: "Relay LLM",
+    vendor: "Conduit",
+    capability: "llm-inference",
+    category: "LLM inference API",
+    priceCents: 2900,
+    billing: "monthly",
+    features: ["streaming", "tool_calling", "long_context"],
+    maxRps: 80,
+    uptimePct: 99.9,
+    blurb: "Mid-tier model with tool calling and 128k context.",
+    bestFor: "Agents and RAG that need tool calls and long context",
+    resource: "/api/provider/relay_llm",
+  },
+  {
+    id: "apex_llm",
+    name: "Apex LLM Pro",
+    vendor: "Summit AI",
+    capability: "llm-inference",
+    category: "LLM inference API",
+    priceCents: 3900,
+    billing: "monthly",
+    features: ["streaming", "tool_calling", "long_context", "data_privacy"],
+    maxRps: 150,
+    uptimePct: 99.99,
+    blurb: "Top model with no-retention data privacy and 1M context.",
+    bestFor: "Sensitive workloads needing privacy plus maximum quality (tradeoff: priciest)",
+    resource: "/api/provider/apex_llm",
+  },
+  // --- transactional-email: three competing offers ---
+  {
+    id: "postbox_lite",
+    name: "Postbox Lite",
+    vendor: "Postbox",
+    capability: "transactional-email",
+    category: "Transactional email API",
+    priceCents: 900,
+    billing: "monthly",
+    features: ["templates"],
+    maxRps: 30,
+    uptimePct: 99.5,
+    blurb: "Simple templated transactional email over a shared pool.",
+    bestFor: "Low-volume signup, verification, and reset emails",
+    resource: "/api/provider/postbox_lite",
+  },
+  {
+    id: "mailroute_pro",
+    name: "MailRoute Pro",
+    vendor: "MailRoute",
+    capability: "transactional-email",
+    category: "Transactional email API",
+    priceCents: 1900,
+    billing: "monthly",
+    features: ["templates", "delivery_webhooks", "analytics"],
+    maxRps: 100,
+    uptimePct: 99.9,
+    blurb: "Templates, delivery webhooks, and open/click analytics.",
+    bestFor: "Growing products that track deliverability and engagement",
+    resource: "/api/provider/mailroute_pro",
+  },
+  {
+    id: "sendforge_scale",
+    name: "SendForge Scale",
+    vendor: "SendForge",
+    capability: "transactional-email",
+    category: "Transactional email API",
+    priceCents: 3500,
+    billing: "monthly",
+    features: ["templates", "delivery_webhooks", "analytics", "dedicated_ip"],
+    maxRps: 300,
+    uptimePct: 99.99,
+    blurb: "Dedicated sending IP, high throughput, full analytics.",
+    bestFor: "High-volume senders needing dedicated IP reputation (tradeoff: pricier, IP warm-up)",
+    resource: "/api/provider/sendforge_scale",
+  },
+  // --- observability: three competing offers ---
+  {
+    id: "tracelite",
+    name: "TraceLite",
+    vendor: "Beacon",
+    capability: "observability",
+    category: "Observability API",
+    priceCents: 1500,
+    billing: "monthly",
+    features: ["logs", "alerts"],
+    maxRps: 50,
+    uptimePct: 99.5,
+    blurb: "Log ingestion with basic alerting and 7-day retention.",
+    bestFor: "Small services that need logs and simple alerts",
+    resource: "/api/provider/tracelite",
+  },
+  {
+    id: "obsly_pro",
+    name: "Obsly Pro",
+    vendor: "Obsly",
+    capability: "observability",
+    category: "Observability API",
+    priceCents: 2900,
+    billing: "monthly",
+    features: ["logs", "traces", "alerts", "retention"],
+    maxRps: 120,
+    uptimePct: 99.9,
+    blurb: "Logs plus distributed traces, alerts, and 30-day retention.",
+    bestFor: "Teams correlating traces with logs across services",
+    resource: "/api/provider/obsly_pro",
+  },
+  {
+    id: "vigil_scale",
+    name: "Vigil Scale",
+    vendor: "Vigil",
+    capability: "observability",
+    category: "Observability API",
+    priceCents: 4500,
+    billing: "monthly",
+    features: ["logs", "traces", "alerts", "retention"],
+    maxRps: 400,
+    uptimePct: 99.99,
+    blurb: "Full-stack telemetry, high ingest, and 1-year retention.",
+    bestFor: "Large systems needing long retention (tradeoff: above the $40 per-charge cap)",
+    resource: "/api/provider/vigil_scale",
+  },
+  // --- authentication: three competing offers ---
+  {
+    id: "authlite",
+    name: "AuthLite",
+    vendor: "Keyhole",
+    capability: "authentication",
+    category: "Authentication API",
+    priceCents: 1000,
+    billing: "monthly",
+    features: ["social_login", "mfa"],
+    maxRps: 60,
+    uptimePct: 99.5,
+    blurb: "Social login and TOTP multi-factor for small apps.",
+    bestFor: "Side projects that need login and basic MFA fast",
+    resource: "/api/provider/authlite",
+  },
+  {
+    id: "passgate_pro",
+    name: "PassGate Pro",
+    vendor: "PassGate",
+    capability: "authentication",
+    category: "Authentication API",
+    priceCents: 2400,
+    billing: "monthly",
+    features: ["social_login", "mfa", "passkeys"],
+    maxRps: 150,
+    uptimePct: 99.9,
+    blurb: "Adds passkeys (WebAuthn) and adaptive multi-factor.",
+    bestFor: "Consumer apps adopting passwordless passkey sign-in",
+    resource: "/api/provider/passgate_pro",
+  },
+  {
+    id: "identity_enterprise",
+    name: "Identity Enterprise",
+    vendor: "Ledgerlock",
+    capability: "authentication",
+    category: "Authentication API",
+    priceCents: 4900,
+    billing: "monthly",
+    features: ["social_login", "mfa", "passkeys", "sso"],
+    maxRps: 300,
+    uptimePct: 99.99,
+    blurb: "Enterprise SSO (SAML/OIDC), passkeys, and SCIM provisioning.",
+    bestFor: "B2B apps needing enterprise SSO (tradeoff: above the $40 per-charge cap)",
+    resource: "/api/provider/identity_enterprise",
+  },
 ];
 
 export function getPlan(id: string): Plan | undefined {
   return CATALOG.find((p) => p.id === id);
+}
+
+/** Live catalog counts, derived — used for UI/docs so no "18 offers" is ever hardcoded. */
+export function catalogStats(): { offers: number; capabilities: number } {
+  return { offers: CATALOG.length, capabilities: new Set(CATALOG.map((p) => p.capability)).size };
 }
 
 export interface MarketQuery {

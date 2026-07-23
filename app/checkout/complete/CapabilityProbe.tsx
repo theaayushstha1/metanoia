@@ -104,6 +104,14 @@ function Capability({ capability, data }: { capability?: string; data: Data }) {
       return <Geocoding data={data} />;
     case "compute":
       return <Compute data={data} />;
+    case "llm-inference":
+      return <LlmInference data={data} />;
+    case "transactional-email":
+      return <EmailSend data={data} />;
+    case "observability":
+      return <Observability data={data} />;
+    case "authentication":
+      return <AuthSession data={data} />;
     default:
       return (
         <pre className="font-mono" style={{ margin: 0, color: "#ece8e1", fontSize: 12, whiteSpace: "pre-wrap" }}>
@@ -317,6 +325,87 @@ function Compute({ data }: { data: Data }) {
       <div style={{ display: "flex", gap: 8 }}>
         <Chip tone="green">{n} GPUs online</Chip>
         <Chip>region {String(data.region ?? "n/a")}</Chip>
+      </div>
+    </div>
+  );
+}
+
+/* ── llm inference: streamed completion + token chips ───────────────────── */
+function LlmInference({ data }: { data: Data }) {
+  const text = String(data.output ?? "");
+  const typed = useTyping(text, 22);
+  const typing = typed.length < text.length;
+  return (
+    <div>
+      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.55, color: "#f4f2ec", fontWeight: 500 }}>
+        {typed}
+        {typing && <span style={{ display: "inline-block", width: 8, height: 18, marginLeft: 2, background: "#4d8cff", transform: "translateY(3px)", animation: "blink 1s steps(1) infinite" }} />}
+      </p>
+      {!typing && (
+        <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+          <Chip>{String(data.tokens_in ?? "?")} in</Chip>
+          <Chip tone="green">{String(data.tokens_out ?? "?")} out</Chip>
+          <Chip>{String(data.finish_reason ?? "stop")}</Chip>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── transactional email: delivered receipt ─────────────────────────────── */
+function EmailSend({ data }: { data: Data }) {
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#39d98a", boxShadow: "0 0 8px #39d98a" }} />
+        <span style={{ fontSize: 16, fontWeight: 700, color: "#f4f2ec" }}>{String(data.status ?? "sent").toUpperCase()}</span>
+        <span className="font-mono" style={{ fontSize: 11, color: "#9fb0cc" }}>to {String(data.to ?? "n/a")}</span>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+        <Chip>template {String(data.template ?? "n/a")}</Chip>
+        <Chip tone="green">{String(data.message_id ?? "msg_?")}</Chip>
+      </div>
+    </div>
+  );
+}
+
+/* ── observability: telemetry counters ──────────────────────────────────── */
+function Observability({ data }: { data: Data }) {
+  const cells: [string, unknown][] = [
+    ["logs/min", data.logs_ingested_last_min],
+    ["traces/min", data.traces_last_min],
+    ["alerts", data.open_alerts],
+  ];
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {cells.map(([label, v]) => (
+          <div key={label} style={{ flex: "1 1 90px", border: "1px solid rgba(255,255,255,.08)", borderRadius: 10, padding: "12px 14px" }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#f4f2ec", fontVariantNumeric: "tabular-nums" }}>{String(v ?? "0")}</div>
+            <div className="font-mono" style={{ fontSize: 9.5, letterSpacing: ".08em", color: "#7c8598" }}>{label.toUpperCase()}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <Chip>retention {String(data.retention_days ?? "?")}d</Chip>
+      </div>
+    </div>
+  );
+}
+
+/* ── authentication: session issued + methods ───────────────────────────── */
+function AuthSession({ data }: { data: Data }) {
+  const methods = Array.isArray(data.methods) ? (data.methods as string[]) : [];
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#39d98a", boxShadow: "0 0 8px #39d98a" }} />
+        <span style={{ fontSize: 16, fontWeight: 700, color: "#f4f2ec" }}>SESSION ISSUED</span>
+        <span className="font-mono" style={{ fontSize: 11, color: "#9fb0cc" }}>{String(data.session_id ?? "sess_?")}</span>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+        {methods.length ? methods.map((m) => <Chip key={m} tone="green">{m}</Chip>) : <Chip>bearer</Chip>}
+        <Chip>expires {String(data.expires_in ?? 3600)}s</Chip>
       </div>
     </div>
   );

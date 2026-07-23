@@ -11,7 +11,7 @@
 import { ToolLoopAgent, tool, isStepCount, hasToolCall } from "ai";
 import { z } from "zod";
 import { agentModel } from "@/lib/agent/model";
-import { CATALOG, getPlan, type Capability, type Plan } from "@/lib/catalog";
+import { CATALOG, CAPABILITIES, getPlan, inferCapability, type Capability, type Plan } from "@/lib/catalog";
 import { getIntentMandate, getSubscriptions } from "@/lib/store";
 import {
   evaluateAgainstConstitution,
@@ -26,14 +26,7 @@ import {
   type RankingPriority,
 } from "@/lib/agent/ranking";
 
-const CapabilitySchema = z.enum([
-  "market-data",
-  "news",
-  "vector-search",
-  "geocoding",
-  "compute",
-  "transcription",
-]);
+const CapabilitySchema = z.enum(CAPABILITIES);
 
 /** The model's structured proposal (validated by Zod at the tool boundary). */
 export const ProposalSchema = z.object({
@@ -139,10 +132,7 @@ export async function runProcurement(
       description:
         "List the curated marketplace of onboarded vendors with structured, comparable attributes.",
       inputSchema: z.object({
-        capability: z
-          .enum(["market-data", "news", "vector-search", "geocoding", "compute", "transcription"])
-          .nullable()
-          .optional(),
+        capability: z.enum(CAPABILITIES).nullable().optional(),
       }),
       execute: async ({ capability }) =>
         CATALOG.filter((p) => !capability || p.capability === capability).map(serviceView),
@@ -176,7 +166,12 @@ export async function runProcurement(
     tools,
     stopWhen: [hasToolCall("recommend"), isStepCount(8)],
   });
-  const result = await agent.generate({ prompt: request });
+  // Deterministic keyword hint (the model still verifies against list_services).
+  const hinted = inferCapability(request);
+  const prompt = hinted
+    ? `${request}\n\n(Hint: this request most likely maps to the "${hinted}" capability. Verify against list_services before proposing.)`
+    : request;
+  const result = await agent.generate({ prompt });
 
   for (const step of result.steps) {
     for (const call of step.toolCalls ?? []) trace.push({ tool: call.toolName, input: call.input });
@@ -261,6 +256,20 @@ export function decide(
   const verdict = selectedRank.verdict;
   const committed = existing.reduce((s, e) => s + e.amount_cents, 0);
   const projected = committed + plan.priceCents;
+  // If the server's compliant pick differs from the model's pick, record the exact reason.
+  const modelRank = ranked.find((candidate) => candidate.plan.id === selected);
+  let overrideReason: string | undefined;
+  if (selected !== plan.id) {
+    const tie = modelRank ? selectedRank.score === modelRank.score : false;
+    const why = modelRank?.hardFailures[0]
+      ? `the proposed plan ${modelRank.hardFailures[0]}`
+      : modelRank && !modelRank.verdict.approved
+        ? `the proposed plan was refused by the mandate (${modelRank.verdict.summary})`
+        : tie
+          ? `it tied on score (${selectedRank.score}) and won the tie-break on lower price (${plan.name} at $${(plan.priceCents / 100).toFixed(2)} vs ${modelPlan.name} at $${(modelPlan.priceCents / 100).toFixed(2)})`
+          : `it scored higher on your priorities (${plan.name} ${selectedRank.score} vs ${modelPlan.name} ${modelRank?.score ?? "?"})`;
+    overrideReason = `Model proposed ${modelPlan.name}; server selected ${plan.name} because ${why}.`;
+  }
   return {
     selected_plan_id: plan.id,
     model_selected_plan_id: selected,
@@ -272,7 +281,7 @@ export function decide(
     confirmation_required: verdict.approved, // require explicit human confirm before any charge
     score: selectedRank.score,
     ranked_plan_ids: ranked.map((candidate) => candidate.plan.id),
-    note: verdict.approved ? undefined : verdict.summary,
+    note: verdict.approved ? overrideReason : verdict.summary,
   };
 }
 

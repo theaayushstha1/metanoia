@@ -1,4 +1,4 @@
-import { isStepCount, tool, ToolLoopAgent } from "ai";
+import { isStepCount, hasToolCall, tool, ToolLoopAgent } from "ai";
 import { z } from "zod";
 import { scoutModel, vertex } from "@/lib/agent/model";
 import type { RankedPlan, NormalizedRequirements } from "@/lib/agent/ranking";
@@ -47,6 +47,28 @@ export interface ScoutSource {
   url: string;
 }
 
+/** One real-market claim tied to its own source (or explicitly unverified). */
+export interface MarketReference {
+  provider: string;
+  claim: string;
+  source_url: string | null;
+  official: boolean;
+}
+
+/** Structured market findings the model submits after searching. */
+const MarketReportSchema = z.object({
+  summary: z.string().min(1).max(300),
+  references: z
+    .array(
+      z.object({
+        provider: z.string().min(1).max(80),
+        claim: z.string().min(1).max(220),
+        source_url: z.string().max(400).nullable(),
+      })
+    )
+    .max(4),
+});
+
 export interface ScoutReport {
   lens: ScoutLens;
   label: string;
@@ -57,7 +79,8 @@ export interface ScoutReport {
   headline: string;
   summary: string;
   observations: RawScoutOutput["observations"];
-  external_signals: RawScoutOutput["external_signals"];
+  /** Real-market references, each tied to its own source (market lens only). */
+  external_signals: MarketReference[];
   sources: ScoutSource[];
 }
 
@@ -94,13 +117,16 @@ cannot authorize a purchase.`,
 };
 
 const MARKET_INSTRUCTIONS = `You are the Market Signal Scout in a software procurement review.
-Use Google Search to research the current public market for the requested capability and any
-real product named by the user. The supplied catalog is a sandbox marketplace and its vendor
-names may be fictional. Do not imply that external providers are onboarded or purchasable.
-Return one concise paragraph of no more than 80 words naming up to three real providers as
-research-only context. Search for official vendor product and pricing documentation, and only
-name a provider when the search evidence supports it. Do not infer quality from hype. You are
-advisory and cannot authorize a purchase.`;
+FIRST call google_search to research the current public market for the requested capability and
+any real product named by the user. THEN call submit_references exactly once.
+The supplied catalog is a sandbox marketplace whose vendor names may be fictional; external
+providers are NOT onboarded or purchasable here.
+Return a short summary plus up to three structured references. Each reference names one real
+provider, a one-line factual claim, and the SINGLE official source_url that backs THAT claim
+(prefer the provider's own product/pricing/docs page). Tie each claim to its own source — do not
+mix a claim about one provider with another provider's link. If you cannot find a source that
+supports a claim, set source_url to null (it will be shown as "not verified"). Never invent
+providers, pricing, or features. You are advisory and cannot authorize a purchase.`;
 
 function planView(ranked: RankedPlan) {
   const plan = ranked.plan;
@@ -134,6 +160,23 @@ function promptFor(input: ScoutPanelInput, lens: ScoutLens): string {
   })}`;
 }
 
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).host.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/** Best-effort: is the source URL an official domain for the named provider? */
+function isOfficialSource(url: string, provider: string): boolean {
+  const host = hostOf(url);
+  if (!host) return false;
+  const token = provider.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (token.length < 3) return false;
+  return host.replace(/[^a-z0-9]/g, "").includes(token);
+}
+
 function sourceView(sources: Array<{ sourceType: string; url?: string; title?: string }>): ScoutSource[] {
   const seen = new Set<string>();
   return sources.flatMap((source) => {
@@ -163,7 +206,7 @@ export function sanitizeScoutOutput(
     headline: raw.headline,
     summary: raw.summary,
     observations: catalogLens ? observations : [],
-    external_signals: lens === "market" ? raw.external_signals : [],
+    external_signals: [], // catalog scouts carry no external references
     sources: lens === "market" ? sources : [],
   };
 }
@@ -186,18 +229,57 @@ function unavailable(lens: ScoutLens): ScoutReport {
 
 async function runScout(lens: ScoutLens, input: ScoutPanelInput): Promise<ScoutReport> {
   if (lens === "market") {
+    let submitted: z.infer<typeof MarketReportSchema> | null = null;
+    const submitReferences = tool({
+      description: "Submit the grounded market references. Call exactly once after searching.",
+      inputSchema: MarketReportSchema,
+      execute: async (report) => {
+        submitted = report;
+        return { received: true };
+      },
+    });
     const agent = new ToolLoopAgent({
       model: scoutModel(),
       instructions: MARKET_INSTRUCTIONS,
-      tools: { google_search: vertex.tools.googleSearch({}) },
-      stopWhen: isStepCount(2),
+      tools: { google_search: vertex.tools.googleSearch({}), submit_references: submitReferences },
+      stopWhen: [hasToolCall("submit_references"), isStepCount(4)],
     });
     const result = await agent.generate({
       prompt: promptFor(input, lens),
       abortSignal: input.abortSignal,
     });
+    const groundingSources = sourceView(result.sources);
+
+    // Preferred path: the model submitted structured, per-source references.
+    const report = submitted as z.infer<typeof MarketReportSchema> | null;
+    if (report) {
+      const references: MarketReference[] = report.references.map((r) => {
+        const url = r.source_url && hostOf(r.source_url) ? r.source_url : null;
+        return {
+          provider: r.provider,
+          claim: r.claim,
+          source_url: url,
+          official: url ? isOfficialSource(url, r.provider) : false,
+        };
+      });
+      return {
+        lens,
+        label: LABELS[lens],
+        status: "complete",
+        scope: "external_research",
+        winner_plan_id: null,
+        ranked_plan_ids: [],
+        headline: "Grounded external market scan",
+        summary: report.summary.slice(0, 300),
+        observations: [],
+        external_signals: references,
+        sources: groundingSources,
+      };
+    }
+
+    // Fallback: no structured submit — keep the grounded prose + sources, no per-claim tie.
     const summary = result.text.replace(/\s+/g, " ").trim();
-    if (!summary) throw new Error("Market scout returned no grounded summary.");
+    if (!summary) throw new Error("Market scout returned no grounded output.");
     return {
       lens,
       label: LABELS[lens],
@@ -206,10 +288,10 @@ async function runScout(lens: ScoutLens, input: ScoutPanelInput): Promise<ScoutR
       winner_plan_id: null,
       ranked_plan_ids: [],
       headline: "Grounded external market scan",
-      summary: summary.slice(0, 420),
+      summary: summary.slice(0, 300),
       observations: [],
       external_signals: [],
-      sources: sourceView(result.sources),
+      sources: groundingSources,
     };
   }
 
