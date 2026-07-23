@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { decide, rankProposal, runProcurement } from "@/lib/agent/procure";
-import { formatUsd } from "@/lib/catalog";
+import { formatUsd, inferCapability } from "@/lib/catalog";
 import { getSubscriptions } from "@/lib/store";
 import { ensureSessionCustomerId } from "@/lib/session";
 import { contextPrompt, enrichProfileContext } from "@/lib/profile/context";
@@ -87,9 +87,11 @@ export async function POST(req: NextRequest) {
       refinementBlock;
     const existing = await getSubscriptions(customerId);
     const intent = await getSessionIntentMandate();
+    const requestedCapability = inferCapability(parsed.data.request);
     const agentResult = await runProcurement(agentRequest, customerId, {
       defaultPriority: profile.priorityLean,
       intent,
+      requestedCapability,
     });
     const applied = agentResult.proposal && parsed.data.refinement
       ? applyProcurementRefinement(agentResult.proposal, parsed.data.refinement)

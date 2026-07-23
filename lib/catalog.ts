@@ -31,14 +31,14 @@ export type Capability = (typeof CAPABILITIES)[number];
 export const CAPABILITY_META: Record<Capability, { label: string; keywords: string[] }> = {
   "market-data": { label: "Market data", keywords: ["market data", "stock price", "stock quote", "equit", "ticker", "trading data"] },
   news: { label: "News", keywords: ["news", "headline", "articles", "press"] },
-  "vector-search": { label: "Vector search", keywords: ["vector", "embedding", "semantic search", "retrieval", "rag"] },
-  geocoding: { label: "Geocoding", keywords: ["geocod", "geocode", "address", "lat", "lng", "maps", "location"] },
+  "vector-search": { label: "Vector search", keywords: ["vector", "embedding", "semantic search", "retrieval", "rag", "pinecone", "weaviate"] },
+  geocoding: { label: "Geocoding", keywords: ["geocod", "geocode", "address", "lat", "lng", "maps", "location", "mapbox"] },
   compute: { label: "GPU compute", keywords: ["gpu", "compute", "a100", "inference server", "training", "cuda"] },
-  transcription: { label: "Transcription", keywords: ["transcri", "speech", "speech-to-text", "captions", "audio to text", "diarization"] },
-  "llm-inference": { label: "LLM inference", keywords: ["llm", "language model", "chat completion", "completion", "gpt", "tool calling", "long context", "inference api", "generate text"] },
-  "transactional-email": { label: "Transactional email", keywords: ["email", "transactional email", "smtp", "send mail", "deliverability", "email api"] },
-  observability: { label: "Observability", keywords: ["observability", "logs", "logging", "tracing", "traces", "metrics", "monitoring", "alerts", "telemetry"] },
-  authentication: { label: "Authentication", keywords: ["auth", "authentication", "login", "sign in", "passkey", "passwordless", "webauthn", "mfa", "2fa", "sso", "oauth", "social login"] },
+  transcription: { label: "Transcription", keywords: ["transcri", "speech", "speech-to-text", "captions", "audio to text", "diarization", "wispr flow", "deepgram", "assemblyai", "whisper"] },
+  "llm-inference": { label: "LLM inference", keywords: ["llm", "language model", "chat completion", "completion", "gpt", "tool calling", "long context", "inference api", "generate text", "openai", "anthropic", "gemini"] },
+  "transactional-email": { label: "Transactional email", keywords: ["email", "transactional email", "smtp", "send mail", "deliverability", "email api", "sendgrid", "postmark", "resend"] },
+  observability: { label: "Observability", keywords: ["observability", "logs", "logging", "tracing", "traces", "metrics", "monitoring", "alerts", "telemetry", "datadog", "sentry", "new relic"] },
+  authentication: { label: "Authentication", keywords: ["auth", "authentication", "login", "sign in", "passkey", "passwordless", "webauthn", "mfa", "2fa", "sso", "oauth", "social login", "auth0", "clerk", "okta"] },
 };
 
 /**

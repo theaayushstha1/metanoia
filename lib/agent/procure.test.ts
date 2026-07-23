@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import fs from "node:fs";
-import { decide, ProposalSchema, type Proposal } from "@/lib/agent/procure";
+import { decide, ProposalSchema, runProcurement, type Proposal } from "@/lib/agent/procure";
 import { searchMarketplace, CATALOG } from "@/lib/catalog";
 import { __resetStore } from "@/lib/store";
 import type { ExistingSubscription } from "@/lib/agent/spendCap";
@@ -98,6 +98,20 @@ describe("structured output", () => {
   it("accepts a well-formed proposal and rejects a malformed one", () => {
     expect(ProposalSchema.safeParse(proposal({ selected_plan_id: "tickstream_pro" })).success).toBe(true);
     expect(ProposalSchema.safeParse({ requested_capability: 42 }).success).toBe(false);
+  });
+});
+
+describe("request capability boundary", () => {
+  it("does not let advisory context turn an unrelated request into a purchase", async () => {
+    const result = await runProcurement(
+      "Please water my plants. Project context: financial research needs real-time market data.",
+      "capability_boundary_test",
+      { requestedCapability: null }
+    );
+
+    expect(result.proposal).toBeNull();
+    expect(result.decision.selected_plan_id).toBeNull();
+    expect(result.trace[0]?.tool).toBe("server_capability_gate");
   });
 });
 

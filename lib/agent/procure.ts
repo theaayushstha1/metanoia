@@ -117,7 +117,12 @@ Procedure:
 export async function runProcurement(
   request: string,
   customerId = "metanoia_demo_customer",
-  opts?: { defaultPriority?: RankingPriority; intent?: IntentMandate }
+  opts?: {
+    defaultPriority?: RankingPriority;
+    intent?: IntentMandate;
+    /** Derived from the user's request only, before advisory context is appended. */
+    requestedCapability?: Capability | null;
+  }
 ): Promise<ProcurementResult> {
   let proposal: Proposal | null = null;
   const trace: TraceStep[] = [];
@@ -126,6 +131,22 @@ export async function runProcurement(
   // the (synchronous) mandate + ranking logic.
   const existing = await getSubscriptions(customerId);
   const intent = opts?.intent ?? getIntentMandate();
+
+  // When the API boundary explicitly supplies a null capability, the user's own
+  // words did not match this curated marketplace. Context may tune tradeoffs but
+  // must never invent a different shopping request.
+  if (opts && "requestedCapability" in opts && opts.requestedCapability === null) {
+    return {
+      proposal: null,
+      decision: decide(null, existing, intent),
+      trace: [
+        {
+          tool: "server_capability_gate",
+          output: { matched: false, reason: "The user request does not match a marketplace capability." },
+        },
+      ],
+    };
+  }
 
   const tools = {
     list_services: tool({
@@ -167,7 +188,9 @@ export async function runProcurement(
     stopWhen: [hasToolCall("recommend"), isStepCount(8)],
   });
   // Deterministic keyword hint (the model still verifies against list_services).
-  const hinted = inferCapability(request);
+  const hinted = opts && "requestedCapability" in opts
+    ? opts.requestedCapability
+    : inferCapability(request);
   const prompt = hinted
     ? `${request}\n\n(Hint: this request most likely maps to the "${hinted}" capability. Verify against list_services before proposing.)`
     : request;

@@ -44,6 +44,8 @@ describe("natural-language category recognition (inferCapability)", () => {
     ["real-time market data with websockets", "market-data"],
     ["a speech-to-text transcription service", "transcription"],
     ["an A100 GPU compute API", "compute"],
+    ["something like Wispr Flow for my meetings", "transcription"],
+    ["an Auth0 alternative with passkeys", "authentication"],
     // Codex regressions: a generic word must not beat a specific one.
     ["Compare prices for an LLM inference API", "llm-inference"],
     ["location-aware authentication with passkeys", "authentication"],
