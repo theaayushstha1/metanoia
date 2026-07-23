@@ -44,3 +44,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# demo voice artifacts (regenerable via ElevenLabs)
+docs/voice/*.mp3
+docs/voice/_filelist.txt
