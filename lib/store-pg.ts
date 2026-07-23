@@ -170,6 +170,16 @@ export class PgStore implements Store {
     return r?.pm ?? undefined;
   }
 
+  async hasReceivedSuccessWebhook(paymentId: string): Promise<boolean> {
+    const db = await getDb();
+    const [row] = await db
+      .select({ id: events.eventId })
+      .from(events)
+      .where(and(eq(events.paymentId, paymentId), eq(events.eventType, "payment_succeeded")))
+      .limit(1);
+    return Boolean(row);
+  }
+
   async recordRefund(r: RefundRecord): Promise<void> {
     const db = await getDb();
     await db

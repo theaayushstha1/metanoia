@@ -105,11 +105,12 @@ def run() -> None:
             phase(
                 page,
                 "5/8",
-                "Webhook remains amber on purpose",
-                "HMAC verification is proven, but a real Hyperswitch-to-Cloud-Run delivery has not landed. Settlement came from authenticated retrieve.",
-                "amber",
+                "Signed webhook delivered",
+                "Hyperswitch emitted the event; the ingress and Cloud Run verified its HMAC; Cloud SQL recorded it for this payment.",
+                "green",
             )
-            page.get_by_text("Webhook receiver verified", exact=True).scroll_into_view_if_needed()
+            page.reload(wait_until="domcontentloaded", timeout=120_000)
+            page.get_by_text("Signed webhook delivered", exact=True).scroll_into_view_if_needed()
             hold(6)
 
             page.goto(f"{BASE_URL}/subscriptions", wait_until="domcontentloaded", timeout=120_000)

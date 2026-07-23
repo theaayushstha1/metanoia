@@ -61,7 +61,7 @@ And a hard no is a hard no. I ask for an A100 GPU that smashes through my cap. D
 Security's real too. This receipt is mine. Try to open it from a different browser, and you get nothing. Payments are locked to the session that made them.
 
 **clip_14_limits · 28.6s**
-There's a whole payment test lab, success, decline, 3DS, and real refunds, on payments I actually own. And I'm gonna be straight with you about the edges, because that matters way more than hype. Recurring off-session billing is built, but Stripe blocks raw cards in the sandbox, so that path is connector-limited right now. And automatic webhook delivery to Cloud Run, the receiver is proven and signed, but the delivery itself still isn't landing, and I'm not going to pretend I know exactly why yet.
+There's a whole payment test lab, success, decline, 3DS, and real refunds, on payments I actually own. The webhook is real too: Hyperswitch sends the signed event through a narrow ingress, both layers verify the untouched body, and Cloud SQL records it. The remaining honest edge is recurring off-session billing. That code exists, but Stripe blocks this sandbox path until the account gets the required card-data capability, and the automatic scheduler is still deferred.
 
 **clip_15_close · 18.0s**
 So that's Metanoia. An agent that shops under a mandate it literally cannot break, settles real money through Juspay Hyperswitch, and proves everything it buys. Model proposes, server decides. That's the whole idea. And honestly, I think that's where this is all going.

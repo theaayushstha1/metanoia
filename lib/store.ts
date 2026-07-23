@@ -61,6 +61,8 @@ export const markPaymentSucceeded = (
 export const markPaymentFailed = (paymentId: string) => store().markPaymentFailed(paymentId);
 export const getSavedPaymentMethod = (customerId: string, planId: string) =>
   store().getSavedPaymentMethod(customerId, planId);
+export const hasReceivedSuccessWebhook = (paymentId: string) =>
+  store().hasReceivedSuccessWebhook(paymentId);
 export const cancelSubscription = (customerId: string, planId: string) =>
   store().cancelSubscription(customerId, planId);
 export const recordRefund = (r: import("@/lib/db/store-contract").RefundRecord) => store().recordRefund(r);

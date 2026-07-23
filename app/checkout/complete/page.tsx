@@ -7,6 +7,7 @@ import {
   getCredential,
   getSubscriptions,
   getSavedPaymentMethod,
+  hasReceivedSuccessWebhook,
 } from "@/lib/store";
 import { CATALOG, getPlan, formatUsd, type Plan } from "@/lib/catalog";
 import { getSessionCustomerId, ownsPayment } from "@/lib/session";
@@ -89,6 +90,7 @@ export default async function CompletePage({
   const plan = attempt ? getPlan(attempt.planId) : undefined;
   const credential = plan ? await getCredential(sessionCustomer, plan.id) : undefined;
   const savedPm = plan ? await getSavedPaymentMethod(sessionCustomer, plan.id) : undefined;
+  const webhookDelivered = payment_id ? await hasReceivedSuccessWebhook(payment_id) : false;
   const committed = (await getSubscriptions(sessionCustomer)).reduce((s, x) => s + x.amount_cents, 0);
   const policy = (await getSessionIntentMandate()).policy;
   const remaining = policy.monthly_cap_cents - committed;
@@ -96,14 +98,15 @@ export default async function CompletePage({
   const amountLabel = formatUsd(amountCents ?? plan?.priceCents ?? 0);
   const credShort = credential ? `${credential.slice(0, 8)}…${credential.slice(-4)}` : "not issued";
 
-  // Non-sensitive card metadata + a deep link to this exact payment in the Hyperswitch dashboard.
+  // Non-sensitive card metadata + a link to the Hyperswitch dashboard.
+  // We link to the Payments LIST, not a deep per-payment URL: the dashboard is a SPA and a
+  // per-payment URL (/payments/{id}/{profile}/{merchant}) only resolves via in-app navigation,
+  // returning an in-app "Error 404" on a cold external load. The list loads reliably; the
+  // payment id is shown on this receipt to paste into the dashboard search.
   const card = payment?.payment_method_data?.card;
   const cardLabel = card?.last4 ? `${card.card_network ?? "Card"} •••• ${card.last4}` : (payment?.payment_method_type ?? "card");
   const dashboardBase = process.env.HYPERSWITCH_DASHBOARD_URL || "https://app.hyperswitch.io";
-  const dashboardUrl =
-    payment?.profile_id && payment?.merchant_id
-      ? `${dashboardBase}/dashboard/payments/${payment.payment_id}/${payment.profile_id}/${payment.merchant_id}`
-      : undefined;
+  const dashboardUrl = payment ? `${dashboardBase}/dashboard/payments` : undefined;
 
   // The real, in-order lifecycle this payment cleared — every line is settled data.
   const trace: TraceStep[] = [
@@ -118,7 +121,17 @@ export default async function CompletePage({
         : "none returned (Fauxpay supports payments/refunds only)",
       tone: savedPm ? "done" : "info",
     },
-    { label: "Webhook receiver verified", detail: "settled via authenticated retrieve; signed-webhook endpoint live (HMAC), awaiting Hyperswitch delivery", tone: "info" },
+    webhookDelivered
+      ? {
+          label: "Signed webhook delivered",
+          detail: "Hyperswitch event received, HMAC verified, deduplicated, and recorded in Cloud SQL",
+          tone: "done",
+        }
+      : {
+          label: "Webhook delivery pending",
+          detail: "authenticated retrieve settled this view; refresh after the asynchronous event arrives",
+          tone: "info",
+        },
     { label: "Subscription recorded", detail: `active · ${usd(remaining)} budget left`, tone: "done" },
     { label: "Capability credential issued", detail: credShort, tone: "done" },
   ];

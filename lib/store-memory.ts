@@ -218,6 +218,13 @@ export class InMemoryStore implements Store {
     return undefined;
   }
 
+  async hasReceivedSuccessWebhook(paymentId: string): Promise<boolean> {
+    this.load();
+    return [...this.events.values()].some(
+      (event) => event.paymentId === paymentId && event.eventType === "payment_succeeded"
+    );
+  }
+
   async getCredential(customerId: string, planId: string): Promise<string | undefined> {
     this.load();
     for (const [cred, owner] of this.credentials) {

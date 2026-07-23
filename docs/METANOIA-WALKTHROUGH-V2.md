@@ -395,14 +395,14 @@ pending attempt in Cloud SQL, and only then gives the browser the client secret 
 the server crashes before recording, no card has been confirmed and no money has moved. A retry uses the same
 merchant payment ID and retrieves the existing live intent. If the browser confirms successfully but the
 receipt request is interrupted, the durable pending row remains; revisiting the receipt retrieves the
-authoritative Hyperswitch status and settles it. A webhook could also settle it, but the real
-Hyperswitch-to-Cloud-Run delivery gap means unattended webhook recovery is not yet proven.
+authoritative Hyperswitch status and settles it. A real signed webhook can also settle it; that path is now
+proven through the deployed ingress and Cloud SQL.
 
 For a **renewal**, the code is pending-first: write the attempt, call the off-session charge with the same
 stable per-period payment ID, then mark only terminal outcomes. A crash after the processor charge therefore
 leaves an auditable pending row rather than an invisible charge. However, there is no scheduler or general
-poller that retrieves stale pending renewals, and the real webhook delivery has not landed. So the design
-prevents a lost *record*, but does not yet guarantee automatic final reconciliation after a real crash.
+poller that retrieves stale pending renewals. Webhook delivery can reconcile a completed renewal, but the
+system still does not guarantee automatic final reconciliation when no terminal event is emitted.
 
 Duplicate protection has several layers: one stable payment ID per logical attempt; a primary key on payment
 attempts; one active subscription row per customer and plan; one event row per webhook event ID; and
@@ -568,7 +568,7 @@ last two are findings from the Version 2 review that must remain open until code
 Plain English: the automated tests run on the fast in-memory backend and check the parts that must never
 break. These are the real current numbers from this repository.
 
-- `npm test` -> **87 passing tests across 16 test files.** **[PROVEN]**
+- `npm test` -> **91 passing tests across 16 test files.** **[PROVEN]**
 - `npx tsc --noEmit` -> clean (no type errors). **[PROVEN]**
 - `npm run lint` -> clean (no warnings). **[PROVEN]**
 
@@ -587,8 +587,10 @@ anonymous all blocked); and the editable-mandate bounds.
 
 Beyond unit tests, the following were observed live on the deployed app: the pages load; a real in-browser
 checkout completed and settled; the database-backed pages read Cloud SQL; the Gemini agent ran on Vertex from
-Cloud Run; the webhook endpoint verified a correctly signed payload (200) and rejected bad and missing
-signatures (401); and one real refund succeeded against the sandbox. **[PROVEN]**
+Cloud Run; the webhook endpoint verified signatures; real Hyperswitch `payment_created` and
+`payment_succeeded` events reached Cloud Run through the signed ingress and returned 200; an app-owned
+success event settled its payment into Cloud SQL before the receipt was opened; and one real refund succeeded
+against the sandbox. **[PROVEN]**
 
 ---
 
@@ -609,7 +611,8 @@ and Cloud SQL paths coded but unobserved. Here is what is different now.
 - **The receipt gained an authoritative Hyperswitch payment record** with amounts, status, connector,
   transaction identifiers, timestamps, and masked card metadata. It is ownership-gated (`416e3d7`) with
   automated cross-session, anonymous, and tampered-id tests (`afb7b52`), deployed and verified live.
-- **The webhook story was fully diagnosed** (section 13), including a neutral-collector control test.
+- **The webhook loop was closed** (section 13): direct Google-fronted delivery was isolated as the failing
+  boundary, then a raw-body-preserving, double-HMAC-verified ingress delivered real events into Cloud Run.
 - **Eleven bugs were fixed and two current audit findings were recorded** (section 10), several of them real
   payment-correctness or access-control issues.
 - **The marketplace expanded from 18 to 30 offers across 10 capabilities.** Four new categories were added —
@@ -623,7 +626,8 @@ and Cloud SQL paths coded but unobserved. Here is what is different now.
   And the offers are split into **PURCHASABLE SANDBOX OFFERS** (fictional, onboarded, ranked, checkout-eligible)
   versus research-only **REAL-MARKET REFERENCES** (real companies from the Market scout, labeled
   "RESEARCH ONLY, NOT PURCHASABLE", never selectable, marked "not verified" when no source backs them).
-- **Tests grew from 40 to 87** across 16 files, adding webhook reconciliation, refunds, session ownership,
+- **Tests grew from 40 to 91** across 16 files, adding webhook reconciliation and receipt delivery state,
+  refunds, session ownership,
   mandate bounds, the catalog expansion (category recognition, ranking, refusal, refinement), and the
   Decision Authority override rendering.
 - **A payments audit document** was produced, grounded in official Hyperswitch documentation, correcting
@@ -631,8 +635,8 @@ and Cloud SQL paths coded but unobserved. Here is what is different now.
   that recurring consent was already complete).
 
 Two honesty corrections also happened since Version 1: the Stripe recurring path was found to be blocked by a
-Stripe account capability (section 13), and the webhook delivery gap was traced carefully instead of being
-blamed on any one party.
+Stripe account capability (section 13), and the webhook delivery gap was first traced without guessing, then
+closed with a narrow ingress after additional live isolation.
 
 *(Note on the PRD: there is no `PRD.md` inside the app repository (`metanoia/`), but the original product
 requirements document does exist one level up in the workspace at `JusPay/PRD.md`. It frames the thesis
@@ -657,9 +661,10 @@ Plain English: this is the honest ledger. Be precise here — it is the section 
 - Per-browser session isolation and cross-session refusal.
 - One real refund against the sandbox, plus the refund guardrail logic.
 - Cancellation frees budget and revokes the credential; resubscribe-after-cancel charges again.
-- The webhook **receiver**: it accepts valid signatures and rejects invalid ones on the deployed endpoint.
+- Signed webhooks end to end: Hyperswitch emitted real events, the ingress and Cloud Run independently
+  verified the raw-body HMAC, Cloud Run returned 200, and an app-owned payment settled into Cloud SQL.
 - Deployment: Cloud Run + Cloud SQL + Vertex + Secret Manager, verified working.
-- 87 passing tests, clean type-check, clean lint.
+- 91 passing tests, clean type-check, clean lint.
 
 ## 13.2 The exact limitations, stated precisely
 
@@ -671,8 +676,8 @@ Plain English: this is the honest ledger. Be precise here — it is the section 
   request. So routing to Stripe was demonstrated, but a Stripe authorization was not.
 - **The renewal scheduler is deferred.** There is no background job that charges subscriptions when they are
   due; renewal is a manual, on-demand action. Automatic recurring is therefore not demonstrated.
-- **Renewal crash recovery is incomplete.** Pending-first storage leaves an audit row, but there is no general
-  poller for stale pending renewals and the real webhook delivery has not landed.
+- **Renewal crash recovery is incomplete.** Pending-first storage leaves an audit row and real webhook
+  delivery now works, but there is no general poller for stale pending renewals.
 - **Renewal duplicate recovery is incomplete.** The same per-period payment ID is derived on retry, but the
   real renewal client does not yet recover Hyperswitch's duplicate-ID response by retrieving the existing
   payment, and the unit test does not model that response.
@@ -681,21 +686,17 @@ Plain English: this is the honest ledger. Be precise here — it is the section 
   pure `ownsPayment` helper with owner, cross-session, anonymous, unknown-payment, and tampered-id tests, and
   the fix is verified live on the deployment. (A possible future refinement: check a local owned attempt
   before the remote retrieval, except on the recovery path, to reduce arbitrary-ID lookups.)
-- **The webhook receiver accepts valid signatures and rejects invalid ones.** That much is proven on the
-  deployed endpoint.
-- **Hyperswitch successfully delivered a webhook to a neutral third-party collector.** In a control test,
-  Hyperswitch's sandbox sent a signed POST to an independent collector, which received it within seconds. So
-  Hyperswitch is capable of sending outbound webhooks.
-- **Hyperswitch delivery to the Cloud Run endpoint was not observed.** Despite the receiver being verified and
-  the endpoint reachable by ordinary clients, no Hyperswitch-originated request ever appeared in the Cloud Run
-  request logs; Hyperswitch's own dashboard recorded the attempts as failed.
-- **The exact reason the Cloud Run delivery did not land remains unknown.** This guide does not claim any
-  specific cause. It does not assert that TLS, IPv6, HTTP/2, Hyperswitch, or Cloud Run is responsible; no
-  single mechanism was confirmed. What was ruled out on our side was checked directly: the app code, cold
-  start, the URL form, public-access permission, and ingress were all verified correct, and ordinary clients
-  reach the endpoint normally.
-- **Full end-to-end webhook delivery is not claimed, and real recurring payments are not claimed.** The
-  receiver is proven; a real Hyperswitch-to-Metanoia delivery landing and settling is not.
+- **Direct delivery from the hosted sandbox to Google frontends was incompatible.** Neither the `run.app`
+  endpoint nor a minimal `cloudfunctions.net` receiver logged an inbound request, while webhook.site and the
+  final Vercel ingress did. Cold start, URL form, IAM, ingress, and Next.js were ruled out directly.
+- **The exact low-level transport mechanism remains unconfirmed.** The two failing endpoints used Google
+  Trust Services ECDSA leaf certificates and the working ingress used an RSA leaf, but the edge network also
+  changed, so this guide does not claim ECDSA alone was the cause.
+- **The webhook loop is now proven.** The Vercel ingress verifies the HMAC over the untouched body, forwards
+  the same bytes and signature, and Cloud Run verifies them again. Real Hyperswitch requests returned 200;
+  an app-owned `payment_succeeded` event settled the subscription in Cloud SQL before receipt fallback ran.
+- **Real recurring payments are still not claimed.** Webhook delivery is fixed; Stripe MIT and the automatic
+  scheduler remain separate limitations.
 
 ## 13.3 Deferred (roadmap)
 
@@ -768,9 +769,10 @@ import with repository code analysis.
    is only your browser's payments.
 8. **Close on architecture and honesty (4:40).** One agent proposes; a deterministic ranker and SpendGuard
    decide; four advisory scouts; Hyperswitch settles; it is deployed on Cloud Run with Cloud SQL and Vertex.
-   Then state plainly what is proven and what is not: checkout and refunds are real; recurring is blocked by a
-   Stripe capability; and the webhook receiver is verified while a real Hyperswitch-to-Cloud-Run delivery was
-   not observed and its cause is still unknown.
+   Then state plainly what is proven and what is not: checkout, refunds, and signed webhook settlement are
+   real; recurring is blocked by a Stripe capability and the automatic scheduler is deferred. Explain that
+   the webhook uses a narrow ingress because direct hosted-sandbox delivery to Google frontends was
+   incompatible.
 
 ---
 
@@ -782,9 +784,8 @@ import with repository code analysis.
   explainable, and cannot be prompt-injected into overspending. This is the decision the whole product rests
   on, and it is enforced by four independent barriers plus a test.
 - **Honesty as a feature.** Fictional vendors labeled as such; a separate "no match" state; an authenticated
-  sandbox provider labeled as a sandbox; and a webhook story that was *diagnosed* with a neutral-collector
-  control test instead of hand-waved. This honesty is more convincing to a payments team than a green
-  checkmark that cannot be explained.
+  sandbox provider labeled as a sandbox; and a webhook failure that was isolated with control endpoints,
+  fixed through a narrow ingress, and then re-proven against Cloud SQL.
 - **Correctness pushed into the database.** Payment-attempt uniqueness and webhook de-duplication are
   primary-key constraints, not application checks, so duplicate records converge under concurrency. The
   external processor call still needs its own duplicate-response recovery, especially for renewals.
@@ -795,8 +796,8 @@ import with repository code analysis.
 
 - Real recurring (merchant-initiated) billing is not proven; it is blocked by a Stripe account capability, and
   the automatic scheduler is deferred.
-- A real Hyperswitch-to-Metanoia webhook delivery was never observed on Cloud Run, and the exact cause is
-  unknown.
+- Direct hosted-sandbox delivery to Google frontends remains incompatible; the deployed signed ingress is an
+  additional component that must be operated with the app.
 - The vendors are fictional by design, so the demo proves the mechanism, not a third-party vendor integration.
 - The capability proof calls an internal sandbox provider, not a real outside API.
 - The expanded receipt's ownership guard is fixed (`416e3d7`), automated-tested (`afb7b52`), deployed, and
@@ -809,9 +810,9 @@ import with repository code analysis.
   returns 403 before Hyperswitch is called.
 - **Is this real recurring billing?** No. Fauxpay proves the first payment; merchant-initiated recurring needs
   a Stripe capability that is not granted, and the scheduler is deferred.
-- **Did the webhook work end to end?** The receiver is proven — it accepts valid signatures and rejects
-  invalid ones. Hyperswitch delivered to a neutral collector, but delivery to Cloud Run was not observed, and
-  the exact cause is unknown; no specific mechanism was confirmed.
+- **Did the webhook work end to end?** Yes. Hyperswitch delivered real signed events to the ingress; the
+  ingress and Cloud Run both verified the raw-body HMAC; Cloud Run returned 200; and the success event settled
+  an app-owned payment in Cloud SQL. Direct sandbox-to-Google delivery failed, so the ingress is intentional.
 - **How is a refund safe on a public app?** It is server-side, must be owned by the requesting session, must
   be for a succeeded payment, is idempotent by a deterministic refund ID, and reports the authoritative status
   from retrieval.
@@ -825,8 +826,8 @@ import with repository code analysis.
   deployed.
 - **What if the server crashes during payment?** The customer checkout cannot confirm a card until a pending
   attempt is durable, and a receipt revisit can retrieve and settle it. Renewals also write pending-first, but
-  automatic stale-pending recovery is not complete because the scheduler, provider duplicate recovery, and a
-  delivered webhook are still missing.
+  automatic stale-pending recovery is not complete because the scheduler and provider duplicate recovery are
+  still missing. Webhook delivery itself is now proven.
 - **How much AP2 is implemented?** The live system uses an AP2-shaped Intent Mandate and Cart Item throughout
   ranking, SpendGuard, checkout, and renewal. The Cart Mandate is only a schema, and Payment Mandates,
   signatures, canonical hashes, replay protection, and external interoperability are deferred. It is

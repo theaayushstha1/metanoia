@@ -5,8 +5,9 @@ One take, one browser, driven in order. Each row is a scene: the on-screen actio
 the matching voice clip (see `VOICE-NARRATION.md` for the audio). Durations are the real
 generated clip lengths; the video timeline stretches a bit where the agent is thinking.
 
-Honesty rules baked in: never claim recurring MIT works, never claim a webhook was
-delivered, never name a single confirmed webhook cause. The edges are said out loud.
+Honesty rules baked in: never claim recurring MIT works. Show the real delivered webhook,
+and describe the isolated Google-fronted compatibility boundary without claiming an
+unproven low-level TLS mechanism.
 
 | # | Clip (dur) | ON SCREEN (action) | Voice beat |
 |---|-----------|--------------------|-----------|
@@ -18,12 +19,12 @@ delivered, never name a single confirmed webhook cause. The edges are said out l
 | 6 | scouts · 16s | Pan the **FOUR SPECIALIST PERSPECTIVES** (ADVISORY ONLY) and the **REAL-MARKET REFERENCES** block ("RESEARCH ONLY, NOT PURCHASABLE"). | Scouts are advisory; real companies are research-only. |
 | 7 | checkout · 14s | Click **Confirm subscription**. Checkout loads. Type `4242 4242 4242 4242`, expiry, CVC in the Hyperswitch iframe; tick authorize. | Real Hyperswitch checkout; card stays in their iframe. |
 | 8 | pay · 1s | Click **Pay $29.00**. | Pay. |
-| 9 | receipt · 25s | Receipt: "Payment settled", capability **200 SANDBOX LIVE**, scroll to the **full payment record** + "Open in Hyperswitch dashboard". | Settled, capability proven, live payment record. |
+| 9 | receipt · 25s | Receipt: "Payment settled", green **SIGNED WEBHOOK DELIVERED**, capability **200 SANDBOX LIVE**, then the full payment record. | Settled, signed event persisted, capability proven. |
 | 10 | subscriptions · 8s | Open **/subscriptions**: the active sub + Cancel. | View and cancel; budget frees up. |
 | 11 | nomatch · 21s | New run: **LLM**, run, then **Find something cheaper** → "No exact match. Here are the tradeoffs", MISSES, "NO CHARGE." | Stays honest: no compliant cheaper plan, no charge. |
 | 12 | denied · 8s | New run: **over-budget** chip → red **Denied.** "CARD NEVER TOUCHED." | A100 over the cap → Denied. |
 | 13 | isolation · 9s | Open the step-9 receipt URL in a **fresh browser** → "No payment for this session." | Payments locked to their session. |
-| 14 | limits · 29s | Open **/lab**: copy-only test cards, refund button. | Test lab + refunds; then the honest edges (Stripe MIT, webhook delivery). |
+| 14 | limits · 29s | Open **/lab**: copy-only test cards, refund button. | Test lab + refunds; recurring Stripe MIT remains the honest edge. |
 | 15 | close · 18s | Back to home; rest on the headline. | The one-liner: model proposes, server decides. |
 
 ## Recording notes

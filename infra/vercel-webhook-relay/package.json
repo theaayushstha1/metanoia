@@ -1,0 +1,8 @@
+{
+  "name": "metanoia-webhook-relay",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": "22.x"
+  }
+}

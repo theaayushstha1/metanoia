@@ -13,6 +13,9 @@ gcloud sql instances delete metanoia-db --project="$P" --account="$A" --quiet
 echo "== deleting Cloud Run service metanoia =="
 gcloud run services delete metanoia --region=us-east1 --project="$P" --account="$A" --quiet
 
+echo "== deleting webhook relay function =="
+gcloud functions delete metanoia-webhook-relay --gen2 --region=us-east1 --project="$P" --account="$A" --quiet
+
 echo "== deleting Artifact Registry repo metanoia (built images) =="
 gcloud artifacts repositories delete metanoia --location=us-east1 --project="$P" --account="$A" --quiet
 
@@ -27,3 +30,5 @@ gcloud iam service-accounts delete "$SA" --project="$P" --account="$A" --quiet
 echo "CLEANUP_DONE — verify nothing remains:"
 echo "  gcloud sql instances list --project=$P --account=$A"
 echo "  gcloud run services list --project=$P --account=$A"
+echo "The Vercel project metanoia-webhook-relay is separate; remove it with:"
+echo "  vercel project rm metanoia-webhook-relay --yes"

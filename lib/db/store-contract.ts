@@ -57,6 +57,8 @@ export interface Store {
   ): Promise<void>;
   markPaymentFailed(paymentId: string): Promise<void>;
   getSavedPaymentMethod(customerId: string, planId: string): Promise<string | undefined>;
+  /** True only after a payment_succeeded webhook for this payment reached our receiver. */
+  hasReceivedSuccessWebhook(paymentId: string): Promise<boolean>;
   /** Cancel an active subscription (frees budget). Returns true if one was cancelled. */
   cancelSubscription(customerId: string, planId: string): Promise<boolean>;
   /** Persist the latest refund state for a payment (idempotent upsert by paymentId). */

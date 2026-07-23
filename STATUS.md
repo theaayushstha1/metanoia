@@ -1,6 +1,6 @@
 # Metanoia - MVP status
 
-_Audited: 2026-07-22_
+_Audited: 2026-07-23_
 
 ## Product boundary
 
@@ -25,8 +25,8 @@ not scrape those services. Production profile import requires OAuth and user con
   scouts are advisory analysts with no spending authority.
 - Payment settles via Hyperswitch Fauxpay (sandbox CIT). Off-session MIT / recurring is NOT proven
   yet (Fauxpay returns no reusable payment method; that needs the Stripe path).
-- Local persistence is a disk-backed JSON store for dev. Durable/serverless persistence uses Cloud
-  SQL Postgres (built via the Cloud SQL connector), which is not yet provisioned or deployed.
+- Local persistence is a disk-backed JSON store for dev. The deployed app uses durable Cloud SQL
+  Postgres through the Cloud SQL connector.
 
 ## P0 MVP - implemented
 
@@ -69,7 +69,7 @@ not scrape those services. Production profile import requires OAuth and user con
 
 - `npx tsc --noEmit` - passes.
 - `npm run lint` - passes with zero warnings.
-- `npm test` - 82/82 tests pass across 16 files: spend policy, ranking, profile import, procurement,
+- `npm test` - 91/91 tests pass across 16 files: spend policy, ranking, profile import, procurement,
   scouts, checkout, idempotency, renewal, preference memory, webhook reconciliation, refunds, session
   ownership, editable mandate bounds, the catalog expansion (category recognition, ranking, mandate
   refusal, refinement), and decision-authority override rendering.
@@ -91,27 +91,28 @@ Project `metanoia-agent-17047`, region `us-east1`.
 - Secrets (Hyperswitch secret key, webhook hash key, DB password) live in Secret Manager, mounted into
   the service. No secret is baked into the image or committed.
 
-### Webhook: receiver verified; Hyperswitch->Cloud Run delivery does not land (diagnosed)
+### Webhook: real signed delivery and Cloud SQL settlement proven
 
-- Receiver PROVEN: the deployed `/api/webhooks` verifies signed events - a correct HMAC-SHA512 payload
-  (Secret-Manager hash key) returns `200`; bad/missing signature returns `401`. Live.
-- Hyperswitch generates + signs the events (real `X-Webhook-Signature-512` + full body) and CAN deliver
-  outbound: a neutral-collector test (webhook.site) received a `POST` from `Hyperswitch-Backend-Server`
-  within seconds. So Hyperswitch's outbound delivery is NOT the blocker.
-- Yet Hyperswitch -> our Cloud Run endpoint never lands. Verified on OUR side: exact `status.url` used,
-  `allUsers` has `roles/run.invoker`, ingress `all`, instance pre-warmed (min-instances tested at 1),
-  both URL forms - and Cloud Run REQUEST logs show ZERO `Hyperswitch-Backend-Server` hits while every
-  Hyperswitch attempt records `500 WebhookCallFailed`. node/browser reach the endpoint fine (200/401/405).
-- Ruled out: app code, cold start, URL format, public-access IAM, ingress. What remains is a transport-
-  layer reachability gap between Hyperswitch's sandbox egress and Cloud Run's `*.run.app` frontend
-  (candidates: TLS/SNI, HTTP/2, or IPv6 - unconfirmed without Hyperswitch-side network visibility).
-- To land a real delivery: front the app with an HTTPS load balancer / custom domain (stable IPv4) or a
-  CDN-proxied endpoint, or use self-hosted / production Hyperswitch. Receiver is ready the instant it lands.
+- Direct sandbox delivery to both `*.run.app` and `*.cloudfunctions.net` failed before either Google
+  service logged a request. Cold start, URL form, IAM, ingress, and application code were ruled out.
+- A narrow Vercel ingress (`metanoia-webhook-relay.vercel.app/api/webhooks`) now verifies the HMAC over
+  the raw body, preserves the exact bytes and signature headers, and forwards to Cloud Run. Cloud Run
+  verifies the HMAC again and remains the only component allowed to mutate payment state.
+- PROVEN live: Hyperswitch sent real `payment_created` and `payment_succeeded` requests with user-agent
+  `Hyperswitch-Backend-Server`; Cloud Run request logs show four `200` responses through the ingress.
+- PROVEN applied: app-owned payment `pay_7079adebf7d5660f384b938579` reached `succeeded`, its signed
+  success event settled the known attempt, and the subscription appeared in Cloud SQL before the receipt
+  page was opened. The receipt now queries the stored event and shows green only for that payment.
+- Root-cause boundary: a compatibility issue in the hosted sandbox's outbound path to Google frontends.
+  Both failed Google endpoints presented Google Trust Services ECDSA leaf certificates; the working
+  Vercel ingress presented an RSA leaf. This correlation is strong but does not prove ECDSA itself is the
+  cause because the edge network also changed. The implemented ingress removes the failing boundary.
 
 ### Teardown
 
-`bash scripts/cleanup-gcp.sh` removes the SQL instance, Cloud Run service, Artifact Registry repo,
-secrets, and the runtime SA (Cloud SQL is the only meaningful ongoing cost).
+`bash scripts/cleanup-gcp.sh` removes the SQL instance, Cloud Run service, Cloud Function diagnostic
+relay, Artifact Registry repo, secrets, and the runtime SA. It also prints the separate Vercel cleanup
+command (Cloud SQL is the only meaningful ongoing cost).
 
 ## P1 - not started (do not begin until the deployed P0 path is proven)
 
@@ -127,9 +128,8 @@ secrets, and the runtime SA (Cloud SQL is the only meaningful ongoing cost).
 
 ## Next milestone
 
-Close the webhook loop: manually resend a webhook from the Hyperswitch dashboard and confirm a `200` in
-Cloud Run logs (receiver already verified). After that, the scheduler for automatic renewals, then the
-Stripe raw-card grant for real off-session MIT. Not before: AP2 signatures, x402, or failover.
+Webhook delivery is closed. Next is the scheduler for automatic renewals, then the Stripe raw-card grant
+for real off-session MIT. Not before: AP2 signatures, x402, or failover.
 
 ## Run locally
 

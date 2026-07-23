@@ -5,6 +5,7 @@ import {
   reconcilePendingEvents,
   getSubscriptions,
   getSavedPaymentMethod,
+  hasReceivedSuccessWebhook,
   __resetStore,
 } from "@/lib/store";
 
@@ -15,6 +16,28 @@ beforeEach(async () => {
 });
 
 describe("webhook reconciliation for retained (processed=false) events", () => {
+  it("reports delivery only for a received payment_succeeded event", async () => {
+    await recordAttempt({ paymentId: "pay_delivery", customerId: CUSTOMER, planId: "vector_search", amountCents: 3900 });
+    expect(await hasReceivedSuccessWebhook("pay_delivery")).toBe(false);
+
+    await processWebhook({
+      eventId: "evt_created",
+      eventType: "payment_created",
+      paymentId: "pay_delivery",
+      raw: {},
+    });
+    expect(await hasReceivedSuccessWebhook("pay_delivery")).toBe(false);
+
+    await processWebhook({
+      eventId: "evt_succeeded",
+      eventType: "payment_succeeded",
+      paymentId: "pay_delivery",
+      raw: {},
+    });
+    expect(await hasReceivedSuccessWebhook("pay_delivery")).toBe(true);
+    expect(await hasReceivedSuccessWebhook("pay_other")).toBe(false);
+  });
+
   it("recovers a retained webhook on redelivery once the payment becomes known", async () => {
     const ev = { eventId: "evt_1", eventType: "payment_succeeded", paymentId: "pay_abc", raw: {} };
 
