@@ -72,17 +72,40 @@ not scrape those services. Production profile import requires OAuth and user con
   returns `200`. Invalid and missing credentials return `401`.
 - Live Vertex and payment credentials are configured locally; secrets stay in `.env.local`.
 
-## External / live checks still required (the deployed P0 path)
+## Deployed (P0 path) - LIVE on GCP
 
-- Complete one fresh in-browser checkout after the latest UI changes and watch the receipt's animated
-  capability proof render `200 · SANDBOX LIVE` (headless equivalent verified above).
-- Configure Cloud SQL, run `npm run db:migrate`, and deploy to a public HTTPS URL.
-- Observe one signed Hyperswitch webhook event end to end against the deployed URL.
+Project `metanoia-agent-17047`, region `us-east1`.
+
+- Cloud Run service `metanoia` is public and serving: https://metanoia-37848252863.us-east1.run.app
+  A real in-browser checkout completes end to end (payment settled, credential issued, capability
+  endpoint returns `200 · SANDBOX LIVE`).
+- Cloud SQL Postgres `metanoia-db` (db-f1-micro) is the durable backend; migrations 0000-0002 applied.
+  DB-backed pages (subscriptions, lab) work, proving SA -> Cloud SQL -> Secret-Manager-password path.
+- Gemini 3.1 Pro runs on Vertex from Cloud Run via the runtime SA (`aiplatform.user`).
+- Secrets (Hyperswitch secret key, webhook hash key, DB password) live in Secret Manager, mounted into
+  the service. No secret is baked into the image or committed.
+
+### Webhook: receiver verified; real delivery pending
+
+- The deployed `/api/webhooks` endpoint VERIFIES signed events: a correct HMAC-SHA512 payload (using the
+  Secret-Manager hash key) returns `200`; a bad or missing signature returns `401`. Confirmed live.
+- The webhook URL + `payment_succeeded_enabled` are configured on the Hyperswitch business profile.
+- NOT yet observed: a real Hyperswitch-ORIGINATED delivery. The sandbox does not auto-emit outgoing
+  webhooks for synchronous Fauxpay payments; a manual "Resend" from the dashboard (or an async connector)
+  is required to complete the Hyperswitch-to-Metanoia half. Endpoint is ready to receive it.
+
+### Teardown
+
+`bash scripts/cleanup-gcp.sh` removes the SQL instance, Cloud Run service, Artifact Registry repo,
+secrets, and the runtime SA (Cloud SQL is the only meaningful ongoing cost).
 
 ## P1 - not started (do not begin until the deployed P0 path is proven)
 
-- Real recurring MIT requires the Stripe test connector that returns a `payment_method_id`.
-  Fauxpay proves the first payment but not recurring billing.
+- Real recurring MIT is CODED BUT CONNECTOR-BLOCKED. Fauxpay proves the first payment but returns no
+  reusable `payment_method_id`. The Stripe connector is wired, but routing a CIT to it returns `UE_9000`
+  ("Sending credit card numbers directly to the Stripe API...") because Hyperswitch forwards the card to
+  Stripe and the connector needs raw-card API access enabled on the Stripe account (a Stripe-side request).
+  Until that capability is granted, `connector: stripe` proves routing only, not authorization.
 - Smart routing, a second connector, decline recovery, and failover.
 - The x402 seller-agent handshake and AP2 cryptographic signatures (AP2 is currently the mandate data
   model and authorization framing, not signed JWTs).
@@ -90,8 +113,9 @@ not scrape those services. Production profile import requires OAuth and user con
 
 ## Next milestone
 
-Configure Cloud SQL, run migrations, deploy publicly, then prove one signed webhook. Durable state
-and deployment are the priority - not more animation, Stripe recurring, AP2 signatures, or failover.
+Close the webhook loop: manually resend a webhook from the Hyperswitch dashboard and confirm a `200` in
+Cloud Run logs (receiver already verified). After that, the scheduler for automatic renewals, then the
+Stripe raw-card grant for real off-session MIT. Not before: AP2 signatures, x402, or failover.
 
 ## Run locally
 

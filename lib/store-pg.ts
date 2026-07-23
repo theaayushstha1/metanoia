@@ -6,12 +6,13 @@
  *  - an unknown-payment success is retained (event row kept, processed=false), never
  *    marked processed and dropped
  */
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull, desc } from "drizzle-orm";
 import { getDb, type DB } from "@/lib/db/client";
-import { attempts, subscriptions, credentials, events } from "@/lib/db/schema";
+import { attempts, subscriptions, credentials, events, refunds } from "@/lib/db/schema";
 import {
   credentialFor,
   type Attempt,
+  type RefundRecord,
   type Store,
   type WebhookInput,
   type WebhookOutcome,
@@ -62,6 +63,24 @@ export class PgStore implements Store {
       paymentMethodId: r.paymentMethodId ?? undefined,
       updatedAt: r.updatedAt,
     };
+  }
+
+  async listAttempts(customerId: string): Promise<Attempt[]> {
+    const db = await getDb();
+    const rows = await db
+      .select()
+      .from(attempts)
+      .where(eq(attempts.customerId, customerId))
+      .orderBy(desc(attempts.updatedAt));
+    return rows.map((r) => ({
+      paymentId: r.paymentId,
+      customerId: r.customerId,
+      planId: r.planId,
+      amountCents: r.amountCents,
+      status: r.status as Attempt["status"],
+      paymentMethodId: r.paymentMethodId ?? undefined,
+      updatedAt: r.updatedAt,
+    }));
   }
 
   /** Settle a payment inside a tx. Returns true only on the first transition. */
@@ -151,6 +170,38 @@ export class PgStore implements Store {
     return r?.pm ?? undefined;
   }
 
+  async recordRefund(r: RefundRecord): Promise<void> {
+    const db = await getDb();
+    await db
+      .insert(refunds)
+      .values(r)
+      .onConflictDoUpdate({
+        target: refunds.paymentId,
+        set: { refundId: r.refundId, status: r.status, amountCents: r.amountCents, updatedAt: r.updatedAt },
+      });
+  }
+
+  async getRefundRecord(paymentId: string): Promise<RefundRecord | undefined> {
+    const db = await getDb();
+    const [r] = await db.select().from(refunds).where(eq(refunds.paymentId, paymentId)).limit(1);
+    return r ? { paymentId: r.paymentId, refundId: r.refundId, status: r.status, amountCents: r.amountCents, updatedAt: r.updatedAt } : undefined;
+  }
+
+  async cancelSubscription(customerId: string, planId: string): Promise<boolean> {
+    const db = await getDb();
+    return db.transaction(async (tx): Promise<boolean> => {
+      const updated = await tx
+        .update(subscriptions)
+        .set({ active: false, updatedAt: Date.now() })
+        .where(and(eq(subscriptions.customerId, customerId), eq(subscriptions.planId, planId), eq(subscriptions.active, true)))
+        .returning({ id: subscriptions.planId });
+      if (updated.length === 0) return false;
+      // Revoke the capability credential too, so access actually stops.
+      await tx.delete(credentials).where(and(eq(credentials.customerId, customerId), eq(credentials.planId, planId)));
+      return true;
+    });
+  }
+
   async getCredential(customerId: string, planId: string): Promise<string | undefined> {
     const db = await getDb();
     const [r] = await db
@@ -170,7 +221,9 @@ export class PgStore implements Store {
   async processWebhook(input: WebhookInput): Promise<WebhookOutcome> {
     const db = await getDb();
     return db.transaction(async (tx): Promise<WebhookOutcome> => {
-      // 1) dedupe + retain: the event insert is the dedupe. Conflict = already seen.
+      // 1) dedupe + retain: the event insert is the dedupe. On conflict, only a
+      // FULLY-PROCESSED row is a true duplicate; a retained (processed=false) row is
+      // reprocessed on redelivery so a once-unknown payment can still recover.
       if (input.eventId) {
         const inserted = await tx
           .insert(events)
@@ -178,34 +231,78 @@ export class PgStore implements Store {
             eventId: input.eventId,
             eventType: input.eventType,
             paymentId: input.paymentId,
+            paymentMethodId: input.paymentMethodId,
+            eventUpdatedAt: input.updatedAt,
             raw: input.raw,
             processed: false,
             receivedAt: Date.now(),
           })
           .onConflictDoNothing()
           .returning({ id: events.eventId });
-        if (inserted.length === 0) return { duplicate: true, applied: false };
+        if (inserted.length === 0) {
+          const [ex] = await tx
+            .select({ processed: events.processed })
+            .from(events)
+            .where(eq(events.eventId, input.eventId))
+            .limit(1);
+          if (ex?.processed) return { duplicate: true, applied: false };
+          // else: retained-unprocessed -> fall through and retry
+        }
       }
 
       // 2) act only on a payment_succeeded for a known attempt.
       let applied = false;
       let reason: string | undefined;
+      let paymentKnown = false;
       if (input.eventType === "payment_succeeded" && input.paymentId) {
+        const [a] = await tx
+          .select({ id: attempts.paymentId })
+          .from(attempts)
+          .where(eq(attempts.paymentId, input.paymentId))
+          .limit(1);
+        paymentKnown = Boolean(a);
         applied = await this.settleSucceeded(tx, input.paymentId, {
           updatedAt: input.updatedAt,
           paymentMethodId: input.paymentMethodId,
         });
-        if (!applied) reason = "unknown or already-applied payment (retained)";
+        if (!applied) reason = paymentKnown ? "already applied" : "unknown payment (retained)";
       }
 
-      // 3) mark processed only if we acted, or it's a non-actionable event we understand.
-      // An unknown-payment success stays processed=false -> retained for reconciliation.
+      // 3) mark processed when handled: acted now, non-actionable, or payment is known
+      // (already settled). A genuinely unknown-payment success stays processed=false.
       const actionable = input.eventType === "payment_succeeded";
-      const known = applied || !actionable;
+      const known = applied || !actionable || paymentKnown;
       if (input.eventId && known) {
         await tx.update(events).set({ processed: true }).where(eq(events.eventId, input.eventId));
       }
       return { duplicate: false, applied, reason };
+    });
+  }
+
+  async reconcilePendingEvents(): Promise<number> {
+    const db = await getDb();
+    return db.transaction(async (tx): Promise<number> => {
+      const pending = await tx
+        .select()
+        .from(events)
+        .where(and(eq(events.processed, false), eq(events.eventType, "payment_succeeded")));
+      let settled = 0;
+      for (const row of pending) {
+        if (!row.paymentId) continue;
+        const [a] = await tx
+          .select({ id: attempts.paymentId })
+          .from(attempts)
+          .where(eq(attempts.paymentId, row.paymentId))
+          .limit(1);
+        if (!a) continue; // still unknown -> keep retained
+        const applied = await this.settleSucceeded(tx, row.paymentId, {
+          updatedAt: row.eventUpdatedAt ?? undefined,
+          paymentMethodId: row.paymentMethodId ?? undefined,
+        });
+        await tx.update(events).set({ processed: true }).where(eq(events.eventId, row.eventId));
+        if (applied) settled++;
+      }
+      return settled;
     });
   }
 
@@ -216,6 +313,7 @@ export class PgStore implements Store {
       await tx.delete(credentials);
       await tx.delete(subscriptions);
       await tx.delete(attempts);
+      await tx.delete(refunds);
     });
   }
 }

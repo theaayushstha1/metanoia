@@ -2,8 +2,8 @@ import { z } from "zod";
 
 export const EditableMandateSchema = z
   .object({
-    monthly_cap_cents: z.number().int().min(3000).max(20000).multipleOf(500),
-    per_charge_cap_cents: z.number().int().min(500).max(10000).multipleOf(500),
+    monthly_cap_cents: z.number().int().min(3000).max(1000000).multipleOf(500),
+    per_charge_cap_cents: z.number().int().min(500).max(1000000).multipleOf(500),
     max_active_subscriptions: z.number().int().min(1).max(10),
   })
   .refine((policy) => policy.per_charge_cap_cents <= policy.monthly_cap_cents, {

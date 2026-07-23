@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { initiateSubscription, confirmPaid, type PaymentClient } from "@/lib/checkout";
-import { getIntentMandate, getSubscriptions, __resetStore } from "@/lib/store";
+import { getIntentMandate, getSubscriptions, cancelSubscription, __resetStore } from "@/lib/store";
 import type { PaymentResponse } from "@/lib/hyperswitch";
 
 const CUSTOMER = "cust_test";
@@ -104,6 +104,38 @@ describe("checkout enforcement", () => {
     await confirmPaid(a.paymentId, { paymentMethodId: "pm_1" });
     await confirmPaid(b.paymentId, { paymentMethodId: "pm_1" });
     expect(await getSubscriptions(CUSTOMER)).toHaveLength(1);
+  });
+
+  it("detects an active subscription and blocks a duplicate charge; resubscribe after cancel is fresh", async () => {
+    const { client } = fakeClient();
+    const now = new Date("2026-07-21T00:00:00Z");
+
+    const first = await initiateSubscription(
+      { planId: "vector_search", customerId: CUSTOMER, returnUrl: RETURN_URL, now },
+      client
+    );
+    if (first.refused) throw new Error("should be approved");
+    await confirmPaid(first.paymentId, { paymentMethodId: "pm_1" });
+    expect(await getSubscriptions(CUSTOMER)).toHaveLength(1);
+
+    // While active: detected directly as already-active, no new charge.
+    const whileActive = await initiateSubscription(
+      { planId: "vector_search", customerId: CUSTOMER, returnUrl: RETURN_URL, now },
+      client
+    );
+    expect(whileActive.refused).toBe(false);
+    if (!whileActive.refused) expect(whileActive.alreadyActive).toBe(true);
+
+    // After cancel: resubscribing creates a FRESH payment id and charges again.
+    expect(await cancelSubscription(CUSTOMER, "vector_search")).toBe(true);
+    expect(await getSubscriptions(CUSTOMER)).toHaveLength(0);
+    const resub = await initiateSubscription(
+      { planId: "vector_search", customerId: CUSTOMER, returnUrl: RETURN_URL, now },
+      client
+    );
+    if (resub.refused) throw new Error("should be approved");
+    expect(resub.alreadyActive).toBe(false);
+    expect(resub.paymentId).not.toBe(first.paymentId);
   });
 
   it("ignores out-of-order (stale) success events", async () => {

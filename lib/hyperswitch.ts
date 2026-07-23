@@ -125,8 +125,12 @@ export async function createPaymentIntent(params: {
 
   if (params.saveForFutureUse) {
     body.setup_future_usage = "off_session";
-    // A sandbox demo may use a payment-only connector such as Fauxpay while the
-    // mandate connector remains Stripe for real saved-card renewals.
+    // Checkout routes to the payment-only sandbox connector (Fauxpay) for a stable demo.
+    // Routing a recurring CIT to Stripe returns UE_9000 ("Sending credit card numbers
+    // directly to the Stripe API...") because Hyperswitch detokenizes and forwards the
+    // card, and Stripe requires raw-card API access enabled on the account. So recurring
+    // is coded but connector-blocked until that Stripe capability is granted. Prefer the
+    // checkout connector; fall back to the mandate connector only if it is unset.
     const mca =
       process.env.HYPERSWITCH_CHECKOUT_CONNECTOR_MCA ??
       process.env.HYPERSWITCH_MANDATE_CONNECTOR_MCA;
@@ -207,4 +211,60 @@ export async function getPayment(paymentId: string): Promise<PaymentResponse> {
     throw new Error(`Hyperswitch GET /payments/${paymentId} failed (${res.status})`);
   }
   return (await res.json()) as PaymentResponse;
+}
+
+export interface RefundResponse {
+  refund_id: string;
+  payment_id?: string;
+  status?: string; // pending | succeeded | failed | review
+  amount?: number;
+  currency?: string;
+  connector?: string;
+  error_message?: string;
+  error_code?: string;
+  [key: string]: unknown;
+}
+
+/** Deterministic refund id so a repeated refund of the same payment is idempotent. */
+export function stableRefundId(paymentId: string): string {
+  return "ref_" + crypto.createHash("sha256").update(`refund:${paymentId}`).digest("hex").slice(0, 26);
+}
+
+/**
+ * Create a refund with a merchant-supplied, deterministic `refund_id`. If the same
+ * refund already exists (a repeat click), Hyperswitch reports a conflict; we then
+ * retrieve and return the existing refund — so the operation is idempotent.
+ */
+export async function createRefund(params: {
+  paymentId: string;
+  amount: number;
+  refundId: string;
+}): Promise<RefundResponse> {
+  try {
+    return await hsFetch<RefundResponse>("/refunds", {
+      payment_id: params.paymentId,
+      amount: params.amount,
+      refund_id: params.refundId,
+      reason: "requested_by_customer",
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("already exists") || msg.includes("duplicate") || msg.includes("HE_01")) {
+      return await getRefund(params.refundId);
+    }
+    throw e;
+  }
+}
+
+/** Retrieve the authoritative refund status. */
+export async function getRefund(refundId: string): Promise<RefundResponse> {
+  assertConfigured();
+  const res = await fetch(`${BASE_URL}/refunds/${refundId}`, {
+    headers: { "api-key": SECRET_KEY },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Hyperswitch GET /refunds/${refundId} failed (${res.status})`);
+  }
+  return (await res.json()) as RefundResponse;
 }

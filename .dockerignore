@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+.data
+.env
+.env.*
+!.env.local.example
+npm-debug.log
+docs/assets
+drizzle/meta
+*.md

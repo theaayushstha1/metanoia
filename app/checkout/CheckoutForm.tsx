@@ -25,6 +25,7 @@ export default function CheckoutForm({
   const widgets = useWidgets();
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [authorized, setAuthorized] = useState(false);
 
   function toReceipt(id?: string) {
     router.push(`/checkout/complete?payment_id=${encodeURIComponent(id ?? paymentId ?? "")}`);
@@ -32,7 +33,7 @@ export default function CheckoutForm({
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!hyper || !widgets) return;
+    if (!hyper || !widgets || !authorized) return;
     setIsLoading(true);
     setMessage("");
 
@@ -58,11 +59,29 @@ export default function CheckoutForm({
     <form onSubmit={handleSubmit}>
       <UnifiedCheckout
         id="unified-checkout"
-        options={{ wallets: { walletReturnUrl: returnUrl, applePay: "never", googlePay: "never" } }}
+        options={{
+          wallets: { walletReturnUrl: returnUrl, applePay: "never", googlePay: "never" },
+          // Surfaces Hyperswitch's own "save for future use" control. Ticking it is
+          // what lets the SDK capture customer_acceptance and vault a reusable method
+          // (payment_method_id) for the off-session renewal.
+          displaySavedPaymentMethodsCheckbox: true,
+        }}
       />
+      <label style={{ display: "flex", alignItems: "flex-start", gap: 10, margin: "16px 0 0", cursor: "pointer" }}>
+        <input
+          type="checkbox"
+          checked={authorized}
+          onChange={(e) => setAuthorized(e.target.checked)}
+          style={{ marginTop: 2, width: 16, height: 16, accentColor: "#2b6bf3", flex: "none" }}
+        />
+        <span className="font-mono" style={{ fontSize: 11, lineHeight: 1.5, color: "var(--muted)" }}>
+          I authorize Metanoia to charge this card each month until I cancel. Also tick &ldquo;save for future
+          use&rdquo; above to arm automatic renewal. Sandbox mode, cancel anytime.
+        </span>
+      </label>
       <button
         type="submit"
-        disabled={!hyper || !widgets || isLoading}
+        disabled={!hyper || !widgets || isLoading || !authorized}
         className="font-body"
         style={{
           width: "100%",
@@ -80,7 +99,7 @@ export default function CheckoutForm({
           padding: 15,
           boxShadow: "0 10px 26px rgba(43,107,243,.38)",
           cursor: isLoading ? "default" : "pointer",
-          opacity: !hyper || !widgets || isLoading ? 0.6 : 1,
+          opacity: !hyper || !widgets || isLoading || !authorized ? 0.6 : 1,
         }}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">

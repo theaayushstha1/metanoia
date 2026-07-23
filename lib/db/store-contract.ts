@@ -15,6 +15,14 @@ export interface Attempt {
   updatedAt: number;
 }
 
+export interface RefundRecord {
+  paymentId: string;
+  refundId: string;
+  status: string; // pending | succeeded | failed | review
+  amountCents: number;
+  updatedAt: number;
+}
+
 export interface WebhookInput {
   eventId?: string;
   eventType?: string;
@@ -41,16 +49,29 @@ export interface Store {
     amountCents: number;
   }): Promise<void>;
   getAttempt(paymentId: string): Promise<Attempt | undefined>;
+  /** All payment attempts for a customer, newest first (for the payment test lab). */
+  listAttempts(customerId: string): Promise<Attempt[]>;
   markPaymentSucceeded(
     paymentId: string,
     opts?: { updatedAt?: number; paymentMethodId?: string }
   ): Promise<void>;
   markPaymentFailed(paymentId: string): Promise<void>;
   getSavedPaymentMethod(customerId: string, planId: string): Promise<string | undefined>;
+  /** Cancel an active subscription (frees budget). Returns true if one was cancelled. */
+  cancelSubscription(customerId: string, planId: string): Promise<boolean>;
+  /** Persist the latest refund state for a payment (idempotent upsert by paymentId). */
+  recordRefund(r: RefundRecord): Promise<void>;
+  /** The persisted refund for a payment, if any (survives page reloads). */
+  getRefundRecord(paymentId: string): Promise<RefundRecord | undefined>;
   getCredential(customerId: string, planId: string): Promise<string | undefined>;
   resolveCredential(cred: string): Promise<{ customerId: string; planId: string } | undefined>;
   /** Atomic: dedupe + retain the event, settle the payment, upsert the subscription. */
   processWebhook(input: WebhookInput): Promise<WebhookOutcome>;
+  /**
+   * Re-attempt every retained (processed=false) actionable event whose payment is
+   * now known. Returns how many were newly settled. Safe to run on a schedule.
+   */
+  reconcilePendingEvents(): Promise<number>;
   /** Test/util: wipe all state. */
   reset(): Promise<void>;
 }

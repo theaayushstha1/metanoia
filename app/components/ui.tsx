@@ -262,4 +262,4 @@ export function TopBar({
 }
 
 export const usd = (cents?: number) =>
-  cents == null ? "—" : `$${(cents / 100).toFixed(2)}`;
+  cents == null ? "n/a" : `$${(cents / 100).toFixed(2)}`;

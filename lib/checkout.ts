@@ -11,6 +11,7 @@ import { getPlan } from "@/lib/catalog";
 import {
   getIntentMandate,
   getSubscriptions,
+  listAttempts,
   recordAttempt,
   markPaymentSucceeded,
   markPaymentFailed,
@@ -50,7 +51,8 @@ export type InitiateResult =
   | { refused: true; verdict: ConstitutionVerdict }
   | {
       refused: false;
-      verdict: ConstitutionVerdict;
+      alreadyActive: boolean;
+      verdict?: ConstitutionVerdict;
       clientSecret?: string;
       paymentId: string;
       status: string;
@@ -63,7 +65,18 @@ export async function initiateSubscription(
   const plan = getPlan(args.planId);
   if (!plan) throw new Error(`Unknown plan: ${args.planId}`);
 
-  // 1) Enforce the mandate FIRST. If refused, the client is never called.
+  const existing = await getSubscriptions(args.customerId);
+
+  // 1) Already actively subscribed to THIS plan -> no card step, no new charge.
+  // Detected directly from the live subscription, never from a payment id's status.
+  if (existing.some((s) => s.plan_id === plan.id)) {
+    const paid = (await listAttempts(args.customerId)).find(
+      (a) => a.planId === plan.id && a.status === "succeeded"
+    );
+    return { refused: false, alreadyActive: true, paymentId: paid?.paymentId ?? "", status: "active" };
+  }
+
+  // 2) Enforce the mandate. If refused, the client is never called.
   const item: CartItem = {
     plan_id: plan.id,
     label: plan.name,
@@ -74,17 +87,22 @@ export async function initiateSubscription(
   const verdict = evaluateAgainstConstitution({
     intent: args.intent ?? getIntentMandate(),
     item,
-    existing: await getSubscriptions(args.customerId),
+    existing,
     now: args.now,
   });
   if (!verdict.approved) {
     return { refused: true, verdict };
   }
 
-  // 2) Approved -> stable id per (customer, plan, period) makes retries idempotent.
-  // The client self-heals a dead intent to a fresh id, so we record the attempt
-  // under the id Hyperswitch actually used (create first, then record).
-  const paymentId = stablePaymentId(`${args.customerId}:${plan.id}:${billingPeriod(args.now)}`);
+  // 3) A fresh subscribe (first time, or after a cancellation). The payment id is stable
+  // ONLY within one attempt: `generation` = number of prior PAID attempts for this plan,
+  // so retries of the same attempt reuse the id (idempotent, no double charge), while
+  // resubscribing after a cancel yields a fresh id that charges again. The client
+  // self-heals a dead intent, so we record the attempt under the id it actually used.
+  const generation = (await listAttempts(args.customerId)).filter(
+    (a) => a.planId === plan.id && a.status === "succeeded"
+  ).length;
+  const paymentId = stablePaymentId(`${args.customerId}:${plan.id}:${billingPeriod(args.now)}:${generation}`);
   const payment = await client.createPaymentIntent({
     amount: plan.priceCents,
     currency: "USD",
@@ -111,6 +129,7 @@ export async function initiateSubscription(
 
   return {
     refused: false,
+    alreadyActive: false,
     verdict,
     clientSecret: payment.client_secret,
     paymentId: actualId,
@@ -217,9 +236,12 @@ export async function renewSubscription(
     },
   });
 
+  // Resolve only on a terminal status. `processing` and `requires_customer_action`
+  // are in-flight: the attempt stays pending so the webhook (or a later retrieve)
+  // settles it — marking those as failed would lose a payment that later succeeds.
   if (payment.status === "succeeded") {
     await confirmPaid(paymentId, { paymentMethodId });
-  } else {
+  } else if (["failed", "cancelled", "expired"].includes(payment.status)) {
     await markPaymentFailed(paymentId);
   }
   return { ok: true, verdict, paymentId, status: payment.status };

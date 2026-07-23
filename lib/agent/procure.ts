@@ -19,7 +19,12 @@ import {
   type ExistingSubscription,
 } from "@/lib/agent/spendCap";
 import type { CartItem, IntentMandate } from "@/lib/ap2/mandate";
-import { rankPlans, type RankedPlan, type RankingPriority } from "@/lib/agent/ranking";
+import {
+  rankPlans,
+  type RankedPlan,
+  type RankingOptions,
+  type RankingPriority,
+} from "@/lib/agent/ranking";
 
 const CapabilitySchema = z.enum([
   "market-data",
@@ -36,6 +41,7 @@ export const ProposalSchema = z.object({
   normalized_requirements: z.object({
     max_price_cents: z.number().int().nullable().optional(),
     min_rps: z.number().int().nullable().optional(),
+    min_uptime_pct: z.number().min(0).max(100).nullable().optional(),
     needs_realtime: z.boolean().optional(),
     needs_websockets: z.boolean().optional(),
     required_features: z.array(z.string()).max(8).optional(),
@@ -106,7 +112,8 @@ Procedure:
 1. Call list_services to see the curated marketplace with structured attributes
    (price_cents, real_time, websockets, max_rps, uptime_pct).
 2. Filter to the requested capability and keep only plans meeting ALL hard requirements.
-3. Normalize required feature flags exactly as they appear in list_services. Set priority to
+3. Normalize required feature flags exactly as they appear in list_services. Preserve any
+   explicit minimum uptime as min_uptime_pct. Set priority to
    cost, reliability, throughput, or balanced based on the request and project context.
 4. Among qualifying plans, propose the strongest fit. A deterministic server ranking will
    independently score capability fit, price efficiency, reliability, and throughput.
@@ -207,7 +214,8 @@ function evaluateForPlan(
 export function decide(
   proposal: Proposal | null,
   existing: ExistingSubscription[],
-  intent: IntentMandate = getIntentMandate()
+  intent: IntentMandate = getIntentMandate(),
+  rankingOptions: RankingOptions = {}
 ): Decision {
   const selected = proposal?.selected_plan_id ?? null;
   if (!selected) {
@@ -233,7 +241,7 @@ export function decide(
     };
   }
 
-  const ranked = rankProposal(proposal, existing, intent);
+  const ranked = rankProposal(proposal, existing, intent, rankingOptions);
   const selectedRank = ranked.find((candidate) => candidate.eligible);
   if (!selectedRank) {
     const closest = ranked[0];
@@ -271,12 +279,14 @@ export function decide(
 export function rankProposal(
   proposal: Proposal,
   existing: ExistingSubscription[],
-  intent: IntentMandate = getIntentMandate()
+  intent: IntentMandate = getIntentMandate(),
+  rankingOptions: RankingOptions = {}
 ): RankedPlan[] {
   return rankPlans(
     proposal.requested_capability as Capability,
     proposal.normalized_requirements,
     existing,
-    intent
+    intent,
+    rankingOptions
   );
 }

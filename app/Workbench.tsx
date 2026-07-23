@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import MemoryPanel from "./MemoryPanel";
 import { useRouter } from "next/navigation";
 import { Icon, Mark, Pill, LiveDot, TopBar, usd } from "./components/ui";
@@ -43,6 +44,7 @@ interface Verdict {
 }
 interface Decision {
   selected_plan_id: string | null;
+  model_selected_plan_id?: string | null;
   valid: boolean;
   plan?: { id: string; name: string; vendor: string; price_cents: number };
   verdict?: Verdict;
@@ -58,6 +60,7 @@ interface Proposal {
   normalized_requirements: {
     max_price_cents?: number | null;
     min_rps?: number | null;
+    min_uptime_pct?: number | null;
     needs_realtime?: boolean;
     needs_websockets?: boolean;
     required_features?: string[];
@@ -96,6 +99,8 @@ interface Result {
 }
 
 type Mandate = { monthly: number; perCharge: number; maxSubs: number; spent: number; active: number };
+type RefinementMode = "cheaper" | "throughput" | "reliability" | "different_vendor" | "custom";
+type RefinementRequest = { mode: RefinementMode; feedback: string };
 type ContextDraft = {
   profileSummary: string;
   projectSummary: string;
@@ -142,7 +147,7 @@ export default function Workbench({ mandate: initialMandate }: { mandate: Mandat
     socialLinks: "",
   });
 
-  async function runWith(text: string) {
+  async function runWith(text: string, refinement?: RefinementRequest & { previousPlanId: string }) {
     setLoading(true);
     setError("");
     setResult(null);
@@ -164,6 +169,7 @@ export default function Workbench({ mandate: initialMandate }: { mandate: Mandat
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           request: text,
+          refinement,
           context: {
             profileSummary: context.profileSummary || undefined,
             projectSummary: context.projectSummary || undefined,
@@ -182,24 +188,66 @@ export default function Workbench({ mandate: initialMandate }: { mandate: Mandat
     }
   }
   const run = () => runWith(request);
-  const refine = (feedback: string) =>
-    runWith(
-      `${request}\n\nThe user reviewed your previous pick and asked for: ${feedback}. ` +
-        `Reconsider every provider and choose again, respecting the same spending mandate.`
-    );
+  const refine = ({ feedback, mode }: RefinementRequest) => {
+    const previousPlanId =
+      result?.decision.selected_plan_id ??
+      result?.decision.model_selected_plan_id ??
+      result?.candidates[0]?.id;
+    if (!previousPlanId) {
+      setError("Run a search before asking Metanoia to refine it.");
+      return;
+    }
+    return runWith(request, { feedback, mode, previousPlanId });
+  };
 
   const statusPills = (
-    <>
-      <Pill>
-        <Icon.bolt size={11} /> HYPERSWITCH · SANDBOX
-      </Pill>
-      <Pill tone="blue">
+    <div
+      className="font-mono"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        border: "1px solid var(--line-3)",
+        borderRadius: 99,
+        background: "#fff",
+        boxShadow: "0 1px 3px rgba(20,40,90,.05)",
+        overflow: "hidden",
+        fontSize: 9.5,
+        fontWeight: 600,
+        letterSpacing: ".07em",
+      }}
+    >
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 13px", color: "var(--muted)" }}>
+        <Icon.bolt size={11} /> HYPERSWITCH
+      </span>
+      <span style={{ width: 1, alignSelf: "stretch", background: "var(--line-2)" }} />
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 13px", color: blue }}>
         <Icon.sparkle size={11} /> GEMINI 3.1 PRO
-      </Pill>
-      <Pill tone="green">
+      </span>
+      <span style={{ width: 1, alignSelf: "stretch", background: "var(--line-2)" }} />
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 13px", color: "var(--green)" }}>
         <LiveDot /> LIVE
-      </Pill>
-    </>
+      </span>
+    </div>
+  );
+
+  const topRight = (
+    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      <Link
+        href="/lab"
+        className="font-mono"
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 600, letterSpacing: ".07em", color: "var(--muted)", textDecoration: "none" }}
+      >
+        <Icon.bolt size={12} /> TEST LAB
+      </Link>
+      <Link
+        href="/subscriptions"
+        className="font-mono"
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 600, letterSpacing: ".07em", color: "var(--muted)", textDecoration: "none" }}
+      >
+        <Icon.card size={12} /> SUBSCRIPTIONS
+      </Link>
+      {statusPills}
+    </div>
   );
 
   const approved = Boolean(
@@ -214,7 +262,7 @@ export default function Workbench({ mandate: initialMandate }: { mandate: Mandat
       )}
       <TopBar
         tag={loading ? "PROCURING" : result ? "RUN R-0114" : "PROCUREMENT TERMINAL"}
-        right={statusPills}
+        right={topRight}
       />
 
       {loading && <Processing />}
@@ -246,6 +294,7 @@ export default function Workbench({ mandate: initialMandate }: { mandate: Mandat
           setMandate={setMandate}
           onReset={() => setResult(null)}
           onRetry={() => runWith(request)}
+          onRefine={refine}
         />
       )}
     </div>
@@ -368,11 +417,18 @@ function ScoutWhisper({ name, facets, align = "left" }: { name: string; facets: 
 }
 
 /* ══ COUNTER / REFINE ══════════════════════════════════════════════════ */
-function CounterBar({ onRefine }: { onRefine: (f: string) => void }) {
+function CounterBar({ onRefine }: { onRefine: (refinement: RefinementRequest) => void }) {
   const [text, setText] = useState("");
-  const chips = ["Find something cheaper", "I need higher throughput", "Prioritize uptime", "Try a different vendor"];
-  const submit = (f: string) => {
-    if (f.trim()) onRefine(f.trim());
+  const chips: { label: string; mode: RefinementMode }[] = [
+    { label: "Find something cheaper", mode: "cheaper" },
+    { label: "I need higher throughput", mode: "throughput" },
+    { label: "Prioritize uptime", mode: "reliability" },
+    { label: "Try a different vendor", mode: "different_vendor" },
+  ];
+  const submit = (feedback: string, mode: RefinementMode) => {
+    if (!feedback.trim()) return;
+    onRefine({ feedback: feedback.trim(), mode });
+    if (mode === "custom") setText("");
   };
   return (
     <div style={{ marginTop: 16, border: "1px dashed var(--line)", borderRadius: 12, background: "var(--panel)", padding: "18px 22px" }}>
@@ -383,14 +439,14 @@ function CounterBar({ onRefine }: { onRefine: (f: string) => void }) {
         </span>
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-        {chips.map((c) => (
+        {chips.map((chip) => (
           <button
-            key={c}
-            onClick={() => submit(c)}
+            key={chip.mode}
+            onClick={() => submit(chip.label, chip.mode)}
             className="font-body"
             style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-2)", background: "#fff", border: "1px solid var(--line-3)", borderRadius: 99, padding: "8px 14px", cursor: "pointer" }}
           >
-            {c}
+            {chip.label}
           </button>
         ))}
       </div>
@@ -398,13 +454,15 @@ function CounterBar({ onRefine }: { onRefine: (f: string) => void }) {
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit(text)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submit(text, "custom");
+          }}
           placeholder="…or say what you'd change"
           className="font-body"
           style={{ flex: 1, border: "1px solid var(--line-3)", borderRadius: 10, padding: "11px 14px", fontSize: 13, outline: "none" }}
         />
         <button
-          onClick={() => submit(text)}
+          onClick={() => submit(text, "custom")}
           className="font-body"
           style={{ fontSize: 12.5, fontWeight: 600, color: blue, background: "var(--accent-bg)", border: "1px solid var(--accent-line)", borderRadius: 10, padding: "11px 20px", cursor: "pointer" }}
         >
@@ -440,7 +498,7 @@ function Home({
   return (
     <main className="mn-workbench-home">
       {/* hero */}
-      <div className="mn-hero" style={{ padding: "14px 56px 10px", textAlign: "center", position: "relative" }}>
+      <div className="mn-hero" style={{ padding: "26px 56px 12px", textAlign: "center", position: "relative" }}>
         <div
           className="font-mono"
           style={{
@@ -458,39 +516,49 @@ function Home({
             animation: "rise .6s .05s both",
           }}
         >
-          <Icon.shieldCheck size={12} /> AGENT WITH A MANDATE
+          <Icon.shieldCheck size={12} /> SPENDS ONLY WHAT YOU ALLOW
         </div>
         <h1
           className="mn-hero-title"
           style={{
-            margin: "8px auto 0",
-            maxWidth: 940,
+            margin: "14px auto 0",
+            maxWidth: 1000,
             fontFamily: disp,
             fontWeight: 800,
-            fontSize: 44,
-            lineHeight: 1,
-            letterSpacing: 0,
+            fontSize: 56,
+            lineHeight: 1.02,
+            letterSpacing: "-.015em",
             textWrap: "balance",
             animation: "rise .7s .12s both",
           }}
         >
-          Give your agent a <span style={{ color: blue }}>budget</span>, not your card.
+          Tell Metanoia <span style={{ color: blue }}>what you need.</span>
         </h1>
+        <p
+          style={{
+            margin: "16px auto 0",
+            maxWidth: 900,
+            fontSize: 18,
+            lineHeight: 1.5,
+            color: "var(--muted)",
+            textWrap: "balance",
+            animation: "rise .7s .18s both",
+          }}
+        >
+          It shops, compares, and buys the best option, under a budget you set, never your card.
+        </p>
       </div>
 
-      <div className="mn-page-pad" style={{ padding: "0 56px", animation: "rise .7s .25s both" }}>
+      {/* project context — moved up, right under the hero */}
+      <div className="mn-page-pad" style={{ padding: "16px 56px 0", animation: "rise .7s .28s both" }}>
         <div style={{ maxWidth: 1560, margin: "0 auto" }}>
-          <MandateTuner mandate={mandate} onChange={setMandate} />
+          <ContextPanel context={context} setContext={setContext} />
         </div>
       </div>
 
-      <div className="mn-page-pad" style={{ padding: "18px 56px 24px", animation: "rise .7s .35s both" }}>
-        <div className="mn-support-grid">
-          <ContextPanel context={context} setContext={setContext} />
-          <MemoryPanel />
-        </div>
-
-        <div className="mn-command-stage">
+      {/* the command — the main action */}
+      <div className="mn-page-pad" style={{ padding: "18px 56px 8px", animation: "rise .7s .34s both" }}>
+        <div className="mn-command-stage" style={{ maxWidth: 1560, margin: "0 auto" }}>
             <section
               className="mn-command-panel"
               aria-label="Procurement request"
@@ -509,7 +577,7 @@ function Home({
                 <textarea
                   value={request}
                   onChange={(e) => setRequest(e.target.value)}
-                  rows={4}
+                  rows={5}
                   spellCheck={false}
                   className="font-mono"
                   aria-label="Describe what your agent should procure"
@@ -525,8 +593,18 @@ function Home({
                   }}
                 />
               </div>
-              <div className="mn-command-footer">
-                <div className="mn-preset-row" style={{ display: "flex", gap: 6 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  padding: "12px 22px 16px",
+                  borderTop: "1px solid var(--line-2)",
+                }}
+              >
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   <PresetChip active label="market-data" onClick={() => setRequest(PRESETS["market-data"])}>
                     <Icon.candles size={12} color={blue} />
                   </PresetChip>
@@ -543,25 +621,9 @@ function Home({
                 <button
                   onClick={run}
                   disabled={loading || request.trim().length < 3}
-                  className="font-body mn-run-button"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 8,
-                    fontSize: 13.5,
-                    fontWeight: 600,
-                    color: "#fff",
-                    background: "linear-gradient(180deg,#3d7bff,#2b6bf3)",
-                    border: "none",
-                    borderRadius: 8,
-                    padding: "12px 18px",
-                    boxShadow: "0 6px 18px rgba(43,107,243,.28)",
-                    cursor: loading ? "default" : "pointer",
-                    opacity: loading || request.trim().length < 3 ? 0.6 : 1,
-                  }}
+                  className="font-body mn-run"
                 >
-                  <Icon.bolt size={13} color="#fff" />
+                  <Icon.bolt size={14} color="#fff" />
                   {loading ? "Procuring…" : "Run Metanoia"}
                 </button>
               </div>
@@ -570,6 +632,7 @@ function Home({
             {error && (
               <div
                 style={{
+                  marginTop: 12,
                   border: "1px solid var(--red-2)",
                   background: "var(--red-bg)",
                   borderRadius: 8,
@@ -581,6 +644,14 @@ function Home({
                 {error}
               </div>
             )}
+        </div>
+      </div>
+
+      {/* agent settings — mandate + memory, at the bottom */}
+      <div className="mn-page-pad" style={{ padding: "10px 56px 44px", animation: "rise .7s .4s both" }}>
+        <div style={{ maxWidth: 1560, margin: "0 auto", display: "grid", gap: 14 }}>
+          <MandateTuner mandate={mandate} onChange={setMandate} />
+          <MemoryPanel />
         </div>
       </div>
     </main>
@@ -790,7 +861,7 @@ function MandateTuner({
       ...mandate,
       ...patch,
       monthly,
-      perCharge: Math.min(patch.perCharge ?? mandate.perCharge, monthly, 10000),
+      perCharge: Math.min(patch.perCharge ?? mandate.perCharge, monthly),
       maxSubs: Math.max(minServices, patch.maxSubs ?? mandate.maxSubs),
     });
   };
@@ -800,53 +871,97 @@ function MandateTuner({
     { label: "Flexible", monthly: 12000, perCharge: 8000, maxSubs: Math.max(minServices, 7) },
   ];
 
+  const ctrlBox: React.CSSProperties = {
+    border: "1px solid var(--line-3)",
+    borderRadius: 9,
+    background: "#fff",
+    padding: "12px 14px",
+  };
+  const stepBtn = (off: boolean): React.CSSProperties => ({
+    width: 26,
+    height: 26,
+    flex: "none",
+    display: "grid",
+    placeItems: "center",
+    border: "1px solid var(--line-3)",
+    borderRadius: "50%",
+    background: off ? "var(--panel)" : "#fff",
+    color: off ? "var(--faint)" : blue,
+    fontSize: 17,
+    lineHeight: 1,
+    cursor: off ? "not-allowed" : "pointer",
+  });
+
   return (
     <section className="mn-mandate-tuner" aria-label="Spending mandate controls">
-      <div className="mn-mandate-tuner-head">
+      <div className="mn-mandate-tuner-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
         <div>
           <div className="font-mono" style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".14em" }}>
             MANDATE CONTROLS
           </div>
-          <div className="font-mono" style={{ marginTop: 4, fontSize: 9, color: "var(--faint)" }}>
-            USER-AUTHORIZED · SERVER ENFORCED
+          <div className="font-mono" style={{ marginTop: 3, fontSize: 9, color: "var(--faint)" }}>
+            YOU SET THE LIMITS · THE SERVER ENFORCES THEM
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+          <span className="font-mono" style={{ fontSize: 9, fontWeight: 600, letterSpacing: ".12em", color: "var(--faint)" }}>
+            PROFILE
+          </span>
+          <div className="mn-mandate-presets" role="group" aria-label="Mandate presets">
+            {presets.map((preset) => {
+              const active =
+                mandate.monthly === preset.monthly &&
+                mandate.perCharge === preset.perCharge &&
+                mandate.maxSubs === preset.maxSubs;
+              return (
+                <button key={preset.label} type="button" className={active ? "is-active" : undefined} onClick={() => set(preset)}>
+                  {preset.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
 
-      <div className="mn-mandate-control-grid">
-        <RangeControl
-          label="MONTHLY BUDGET"
-          value={mandate.monthly}
-          min={Math.max(3000, Math.ceil(mandate.spent / 500) * 500)}
-          max={20000}
-          step={500}
-          onChange={(monthly) => set({ monthly })}
-        />
-        <RangeControl
-          label="MAX SINGLE PURCHASE"
-          value={mandate.perCharge}
-          min={500}
-          max={Math.min(10000, mandate.monthly)}
-          step={500}
-          onChange={(perCharge) => set({ perCharge })}
-        />
-        <div className="mn-service-stepper">
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, padding: 14 }}>
+        <div style={ctrlBox}>
+          <RangeControl
+            label="MONTHLY BUDGET"
+            value={mandate.monthly}
+            min={Math.max(3000, Math.ceil(mandate.spent / 500) * 500)}
+            max={100000}
+            step={500}
+            onChange={(monthly) => set({ monthly })}
+          />
+        </div>
+        <div style={ctrlBox}>
+          <RangeControl
+            label="MAX SINGLE PURCHASE"
+            value={mandate.perCharge}
+            min={500}
+            max={mandate.monthly}
+            maxInput={mandate.monthly}
+            step={500}
+            onChange={(perCharge) => set({ perCharge })}
+          />
+        </div>
+        <div style={ctrlBox}>
           <div className="mn-range-label font-mono">
             <span>SERVICE SLOTS</span>
-            <output aria-live="polite">{mandate.maxSubs}</output>
+            <NumField value={mandate.maxSubs} min={minServices} max={10} onChange={(n) => set({ maxSubs: n })} />
           </div>
-          <div className="mn-service-control-row">
+          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "10px 0 0" }}>
             <button
               type="button"
               aria-label="Decrease service limit"
-              title="Decrease service limit"
               disabled={mandate.maxSubs <= minServices}
               onClick={() => set({ maxSubs: mandate.maxSubs - 1 })}
+              style={stepBtn(mandate.maxSubs <= minServices)}
             >
               −
             </button>
-            <div className="mn-slot-track" aria-hidden="true">
-              {Array.from({ length: 10 }).map((_, index) => (
+            <div className="mn-slot-track" style={{ flex: 1, marginTop: 0, gridTemplateColumns: `repeat(${Math.max(10, mandate.maxSubs)}, 1fr)` }} aria-hidden="true">
+              {Array.from({ length: Math.max(10, mandate.maxSubs) }).map((_, index) => (
                 <span
                   key={index}
                   className={index < mandate.maxSubs ? "is-available" : undefined}
@@ -857,9 +972,9 @@ function MandateTuner({
             <button
               type="button"
               aria-label="Increase service limit"
-              title="Increase service limit"
               disabled={mandate.maxSubs >= 10}
               onClick={() => set({ maxSubs: mandate.maxSubs + 1 })}
+              style={stepBtn(mandate.maxSubs >= 10)}
             >
               +
             </button>
@@ -868,28 +983,6 @@ function MandateTuner({
             <span>{mandate.active} ACTIVE</span>
             <span>{Math.max(0, mandate.maxSubs - mandate.active)} OPEN</span>
           </span>
-        </div>
-      </div>
-
-      <div className="mn-mandate-profile-row">
-        <span className="font-mono">SPENDING PROFILE</span>
-        <div className="mn-mandate-presets" role="group" aria-label="Mandate presets">
-          {presets.map((preset) => {
-            const active =
-              mandate.monthly === preset.monthly &&
-              mandate.perCharge === preset.perCharge &&
-              mandate.maxSubs === preset.maxSubs;
-            return (
-              <button
-                key={preset.label}
-                type="button"
-                className={active ? "is-active" : undefined}
-                onClick={() => set(preset)}
-              >
-                {preset.label}
-              </button>
-            );
-          })}
         </div>
       </div>
 
@@ -912,6 +1005,7 @@ function RangeControl({
   max,
   step,
   onChange,
+  maxInput = 1000000,
 }: {
   label: string;
   value: number;
@@ -919,19 +1013,73 @@ function RangeControl({
   max: number;
   step: number;
   onChange: (value: number) => void;
+  /** Hard ceiling when the amount is typed directly (cents). */
+  maxInput?: number;
 }) {
-  const safeValue = Math.max(min, Math.min(max, value));
-  const progress = ((safeValue - min) / Math.max(1, max - min)) * 100;
+  // The slider stretches to include the current value, so a typed amount above the
+  // default max is still draggable.
+  const sliderMax = Math.max(max, value);
+  const safeValue = Math.max(min, Math.min(sliderMax, value));
+  const progress = ((safeValue - min) / Math.max(1, sliderMax - min)) * 100;
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? String(Math.round(value / 100));
+  const commit = (raw: string) => {
+    const dollars = parseFloat(raw.replace(/[^0-9.]/g, ""));
+    if (!Number.isNaN(dollars)) {
+      const cents = Math.round((dollars * 100) / step) * step; // snap to step
+      onChange(Math.max(min, Math.min(maxInput, cents)));
+    }
+    setDraft(null);
+  };
   return (
-    <label className="mn-range-control">
+    <div className="mn-range-control">
       <span className="mn-range-label font-mono">
         <span>{label}</span>
-        <output>{usd(safeValue)}</output>
+        <label
+          title="Click to type an exact amount"
+          style={{
+            display: "inline-flex",
+            alignItems: "baseline",
+            gap: 1,
+            color: "var(--ink)",
+            fontSize: 14,
+            fontWeight: 700,
+            background: "#fff",
+            border: "1px solid var(--line-3)",
+            borderRadius: 7,
+            padding: "3px 9px",
+            cursor: "text",
+          }}
+        >
+          <span style={{ opacity: 0.5, fontWeight: 600 }}>$</span>
+          <input
+            value={shown}
+            onChange={(e) => setDraft(e.target.value)}
+            onFocus={(e) => e.currentTarget.select()}
+            onBlur={(e) => commit(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+            }}
+            inputMode="numeric"
+            aria-label={`${label} in dollars, editable`}
+            style={{
+              width: `${Math.max(2, shown.length + 0.5)}ch`,
+              border: "none",
+              outline: "none",
+              background: "transparent",
+              font: "inherit",
+              color: "inherit",
+              textAlign: "right",
+              padding: 0,
+              cursor: "text",
+            }}
+          />
+        </label>
       </span>
       <input
         type="range"
         min={min}
-        max={max}
+        max={sliderMax}
         step={step}
         value={safeValue}
         onChange={(event) => onChange(Number(event.target.value))}
@@ -939,8 +1087,59 @@ function RangeControl({
       />
       <span className="mn-range-scale font-mono">
         <span>{usd(min)}</span>
-        <span>{usd(max)}</span>
+        <span>{usd(sliderMax)}</span>
       </span>
+    </div>
+  );
+}
+
+/* Editable integer field (service slots). Click to type a number. */
+function NumField({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (n: number) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? String(value);
+  const commit = (raw: string) => {
+    const n = parseInt(raw.replace(/[^0-9]/g, ""), 10);
+    if (!Number.isNaN(n)) onChange(Math.max(min, Math.min(max, n)));
+    setDraft(null);
+  };
+  return (
+    <label
+      title="Click to type a number"
+      style={{
+        display: "inline-flex",
+        alignItems: "baseline",
+        color: "var(--ink)",
+        fontSize: 14,
+        fontWeight: 700,
+        background: "#fff",
+        border: "1px solid var(--line-3)",
+        borderRadius: 7,
+        padding: "3px 10px",
+        cursor: "text",
+      }}
+    >
+      <input
+        value={shown}
+        onChange={(e) => setDraft(e.target.value)}
+        onFocus={(e) => e.currentTarget.select()}
+        onBlur={(e) => commit(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+        }}
+        inputMode="numeric"
+        aria-label="Service slots, editable"
+        style={{
+          width: `${Math.max(1, shown.length + 0.5)}ch`,
+          border: "none",
+          outline: "none",
+          background: "transparent",
+          font: "inherit",
+          color: "inherit",
+          textAlign: "right",
+          padding: 0,
+          cursor: "text",
+        }}
+      />
     </label>
   );
 }
@@ -990,7 +1189,7 @@ function AgentResult({
   result: Result;
   mandate: Mandate;
   onConfirm: (id: string) => void;
-  onRefine: (f: string) => void;
+  onRefine: (refinement: RefinementRequest) => void;
 }) {
   const d = result.decision;
   const checks = d.verdict?.checks ?? [];
@@ -1340,10 +1539,10 @@ function OfferRow({
         {c.price}
       </span>
       <span className="font-mono" style={{ fontSize: selected ? 13 : 12, fontWeight: selected ? 600 : 500, color: selected ? "var(--ink)" : undefined }}>
-        {c.max_rps != null ? `${c.max_rps} req/s` : "—"}
+        {c.max_rps != null ? `${c.max_rps} req/s` : "n/a"}
       </span>
       <span className="font-mono" style={{ fontSize: selected ? 13 : 12, fontWeight: selected ? 600 : 500, color: selected ? "var(--ink)" : undefined }}>
-        {c.uptime_pct ? `${c.uptime_pct}%` : "—"}
+        {c.uptime_pct ? `${c.uptime_pct}%` : "n/a"}
       </span>
       <span style={{ fontSize: 11.5, lineHeight: 1.35, color: c.eligible ? "var(--muted)" : "var(--red)" }}>
         {c.eligible ? c.best_for : c.hard_failures[0] ?? c.tradeoff}
@@ -1378,6 +1577,7 @@ function requirementSummary(proposal: Proposal | null): string {
     req.priority ? `${req.priority} priority` : "balanced priority",
     req.max_price_cents != null ? `≤${usd(req.max_price_cents)}` : null,
     req.min_rps != null ? `≥${req.min_rps} req/s` : null,
+    req.min_uptime_pct != null ? `≥${req.min_uptime_pct.toFixed(3)}% uptime` : null,
     req.needs_realtime ? "realtime" : null,
     req.needs_websockets ? "websockets" : null,
     ...(req.required_features ?? []).map((feature) => feature.replace(/_/g, " ")),
@@ -1440,11 +1640,22 @@ function shortDetail(c: Check): string {
 /* Honest empty state: the request isn't something the marketplace carries. Neutral,
    not the red "Denied" screen — a budget refusal and "we don't sell that" are
    different truths and must read differently. */
-function NoMatch({ onReset }: { onReset: () => void }) {
+function NoMatch({
+  result,
+  onReset,
+  onRefine,
+}: {
+  result: Result;
+  onReset: () => void;
+  onRefine: (refinement: RefinementRequest) => void;
+}) {
+  const alternatives = result.candidates;
+  const hasAlternatives = alternatives.length > 0;
+
   return (
-    <div style={{ padding: "80px 64px", position: "relative", overflow: "hidden" }}>
+    <div style={{ padding: "52px 64px 64px", position: "relative", overflow: "hidden" }}>
       <div style={{ position: "absolute", inset: 0, background: "radial-gradient(600px 300px at 20% 0,rgba(77,140,255,.08),transparent)" }} />
-      <div style={{ position: "relative", maxWidth: 580 }}>
+      <div style={{ position: "relative", maxWidth: 1180, margin: "0 auto" }}>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 10, animation: "rise .5s .05s both" }}>
           <span style={{ width: 52, height: 52, display: "grid", placeItems: "center", background: "var(--accent-bg)", border: "1px solid var(--accent-line)", borderRadius: 14 }}>
             <Icon.grid size={22} color={blue} />
@@ -1453,14 +1664,51 @@ function NoMatch({ onReset }: { onReset: () => void }) {
             NO MATCH FOUND
           </span>
         </div>
-        <div style={{ marginTop: 22, fontFamily: disp, fontWeight: 800, fontSize: 54, lineHeight: 1.02, letterSpacing: "-.02em", animation: "rise .6s .15s both" }}>
-          Nothing to compare yet.
+        <div style={{ marginTop: 22, maxWidth: 760, fontFamily: disp, fontWeight: 800, fontSize: 48, lineHeight: 1.04, letterSpacing: "-.02em", animation: "rise .6s .15s both" }}>
+          {hasAlternatives ? "No exact match. Here are the tradeoffs." : "Nothing to compare yet."}
         </div>
-        <p style={{ margin: "18px 0 0", fontSize: 16, lineHeight: 1.6, color: "var(--muted)", animation: "rise .6s .25s both" }}>
-          Metanoia couldn&apos;t find a match for that under your constraints. The marketplace currently covers{" "}
-          <b style={{ color: "var(--ink)" }}>market data, news, vector search, geocoding, GPU compute, and transcription</b>.
-          Your budget wasn&apos;t the blocker — there was simply nothing to shop.
+        <p style={{ margin: "16px 0 0", maxWidth: 780, fontSize: 15, lineHeight: 1.6, color: "var(--muted)", animation: "rise .6s .25s both" }}>
+          {hasAlternatives ? (
+            <>None of the onboarded services satisfies every revised constraint. Metanoia returned the nearest options and will not charge until you change the requirement.</>
+          ) : (
+            <>The marketplace currently covers <b style={{ color: "var(--ink)" }}>market data, news, vector search, geocoding, GPU compute, and transcription</b>.</>
+          )}
         </p>
+
+        {hasAlternatives && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 12, marginTop: 26, animation: "rise .6s .3s both" }}>
+            {alternatives.map((candidate, index) => {
+              const failures = candidate.hard_failures.length
+                ? candidate.hard_failures
+                : [candidate.tradeoff];
+              return (
+                <article key={candidate.id} style={{ border: "1px solid var(--line-3)", borderRadius: 10, background: "#fff", padding: "18px 20px", boxShadow: "0 8px 24px rgba(20,40,90,.05)" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                    <span className="font-mono" style={{ width: 30, height: 30, display: "grid", placeItems: "center", borderRadius: 7, background: "var(--accent-bg)", color: blue, fontSize: 10, fontWeight: 700 }}>
+                      {index + 1}
+                    </span>
+                    <span style={{ minWidth: 0 }}>
+                      <span className="font-body" style={{ display: "block", fontSize: 14, fontWeight: 700 }}>{candidate.name}</span>
+                      <span className="font-mono" style={{ fontSize: 9.5, color: "var(--faint)" }}>{candidate.vendor.toUpperCase()}</span>
+                    </span>
+                    <span className="font-mono" style={{ marginLeft: "auto", fontSize: 14, fontWeight: 700, color: blue }}>{candidate.price}</span>
+                  </div>
+                  <div className="font-mono" style={{ display: "flex", gap: 12, marginTop: 14, fontSize: 10, color: "var(--muted)" }}>
+                    <span>{candidate.max_rps ?? "n/a"} req/s</span>
+                    <span>{candidate.uptime_pct ?? "n/a"}% uptime</span>
+                  </div>
+                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--line-2)" }}>
+                    <span className="font-mono" style={{ display: "block", marginBottom: 6, fontSize: 9, fontWeight: 700, letterSpacing: ".1em", color: "var(--red)" }}>MISSES</span>
+                    {failures.slice(0, 2).map((failure) => (
+                      <div key={failure} style={{ fontSize: 11.5, lineHeight: 1.45, color: "var(--muted)" }}>• {failure}</div>
+                    ))}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+
         <div style={{ display: "inline-flex", alignItems: "center", gap: 10, marginTop: 26, background: "var(--accent-bg)", border: "1px solid var(--accent-line)", borderRadius: 10, padding: "12px 18px", animation: "rise .6s .35s both" }}>
           <Icon.lock size={14} />
           <span className="font-mono" style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: ".1em", color: blue }}>
@@ -1472,6 +1720,7 @@ function NoMatch({ onReset }: { onReset: () => void }) {
             Try another request
           </button>
         </div>
+        {hasAlternatives && <CounterBar onRefine={onRefine} />}
       </div>
     </div>
   );
@@ -1483,12 +1732,14 @@ function Refused({
   setMandate,
   onReset,
   onRetry,
+  onRefine,
 }: {
   result: Result;
   mandate: Mandate;
   setMandate: (mandate: Mandate) => void;
   onReset: () => void;
   onRetry: () => void;
+  onRefine: (refinement: RefinementRequest) => void;
 }) {
   const b = result.blocked;
   const plan = b?.plan;
@@ -1500,8 +1751,9 @@ function Refused({
   // "blocked" being set (the closest plan can pass the mandate yet still not be a real
   // match). No failing check => the agent found nothing to shop, which is an honest
   // empty state, NOT a refusal, and must not wear the red "Denied" screen.
-  const isMandateDenial = checks.some((c) => !c.passed);
-  if (!isMandateDenial) return <NoMatch onReset={onReset} />;
+  const hasRequestMatch = result.candidates.some((candidate) => candidate.hard_failures.length === 0);
+  const isMandateDenial = hasRequestMatch && checks.some((c) => !c.passed);
+  if (!isMandateDenial) return <NoMatch result={result} onReset={onReset} onRefine={onRefine} />;
 
   return (
     <div className="mn-refused-grid" style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 60, padding: "56px 64px", alignItems: "center", position: "relative", overflow: "hidden" }}>
@@ -1579,6 +1831,7 @@ function Refused({
           </div>
         )}
         <MandateTuner mandate={mandate} onChange={setMandate} onApply={onRetry} />
+        <CounterBar onRefine={onRefine} />
       </div>
     </div>
   );

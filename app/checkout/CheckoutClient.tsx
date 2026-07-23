@@ -34,6 +34,7 @@ export default function CheckoutClient({
   const router = useRouter();
   const [options, setOptions] = useState<Record<string, unknown>>({});
   const [paymentId, setPaymentId] = useState<string>();
+  const [alreadyPaidId, setAlreadyPaidId] = useState<string | null>(null);
   const [error, setError] = useState<string>(
     KEY_READY ? "" : "Add your Hyperswitch publishable key to .env.local and restart the dev server."
   );
@@ -51,9 +52,10 @@ export default function CheckoutClient({
         if (cancelled) return;
         if (data.refused) setError(`Refused by the mandate: ${data.verdict?.summary ?? ""}`);
         else if (data.error) setError(data.error);
-        else if (data.status === "succeeded") {
-          // Already paid this period -> go straight to the receipt.
-          router.push(`/checkout/complete?payment_id=${encodeURIComponent(data.paymentId ?? "")}`);
+        else if (data.alreadyActive || data.status === "succeeded") {
+          // Already actively subscribed to this plan. Don't silently jump and don't
+          // double-charge — explain why and let the user choose what to do.
+          setAlreadyPaidId(data.paymentId ?? "");
         } else {
           setPaymentId(data.paymentId);
           setOptions({
@@ -84,6 +86,38 @@ export default function CheckoutClient({
         }}
       >
         {error}
+      </div>
+    );
+  }
+
+  if (alreadyPaidId) {
+    return (
+      <div style={{ border: "1px solid var(--line)", borderRadius: 14, padding: "22px 24px", background: "linear-gradient(180deg,#f4f8ff,#fff)" }}>
+        <div className="font-mono" style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".14em", color: "var(--green)" }}>
+          ALREADY SUBSCRIBED
+        </div>
+        <p style={{ margin: "10px 0 0", fontSize: 14, lineHeight: 1.55, color: "var(--ink)" }}>
+          You already have an active subscription to this plan, so there is no card step and no new charge.
+        </p>
+        <p className="font-mono" style={{ margin: "10px 0 0", fontSize: 11, color: "var(--faint)" }}>
+          Cancel it on the Subscriptions page to resubscribe — that starts a fresh payment and charges again.
+        </p>
+        <div style={{ display: "flex", gap: 10, marginTop: 18, flexWrap: "wrap" }}>
+          <button
+            onClick={() => router.push(`/checkout/complete?payment_id=${encodeURIComponent(alreadyPaidId)}`)}
+            className="font-body"
+            style={{ fontSize: 13, fontWeight: 600, color: "#fff", background: "var(--blue)", border: "none", borderRadius: 10, padding: "11px 20px", cursor: "pointer" }}
+          >
+            View receipt
+          </button>
+          <button
+            onClick={() => router.push("/")}
+            className="font-body"
+            style={{ fontSize: 13, fontWeight: 600, color: "var(--blue)", background: "#fff", border: "1px solid var(--line)", borderRadius: 10, padding: "11px 20px", cursor: "pointer" }}
+          >
+            Back to workbench
+          </button>
+        </div>
       </div>
     );
   }

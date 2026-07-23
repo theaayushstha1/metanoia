@@ -2,7 +2,6 @@ import CheckoutClient from "./CheckoutClient";
 import { getPlan, formatUsd } from "@/lib/catalog";
 import { TopBar, Pill, Icon, usd } from "../components/ui";
 
-const blue = "var(--blue)";
 const disp = "var(--font-bricolage), sans-serif";
 
 export default async function CheckoutPage({
@@ -32,88 +31,60 @@ export default async function CheckoutPage({
             </Pill>
           }
         />
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px", background: "radial-gradient(720px 420px at 50% -40px,rgba(77,140,255,.07),transparent)" }}>
-        <div className="mn-checkout-grid" style={{ display: "grid", gridTemplateColumns: "1fr 420px", width: "100%", maxWidth: 1000, borderRadius: 20, overflow: "hidden", border: "1px solid var(--line)", boxShadow: "0 24px 64px rgba(20,40,90,.14)", background: "#fff", animation: "rise .55s .05s both" }}>
-          {/* order summary */}
-          <div
-            className="mn-checkout-summary"
-            style={{
-              background: "linear-gradient(160deg,#eef4ff,#f9fbff)",
-              borderRight: "1px solid var(--line-2)",
-              padding: "48px 44px",
-              position: "relative",
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
-            }}
-          >
-            <div style={{ position: "absolute", right: -60, top: -60, width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(circle,rgba(77,140,255,.16),transparent 70%)" }} />
-            <div className="font-mono" style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".16em", color: blue }}>
-              ORDER
-            </div>
-            <div
-              style={{
-                marginTop: 18,
-                border: "1px solid var(--line)",
-                borderRadius: 14,
-                background: "#fff",
-                boxShadow: "0 12px 32px rgba(20,40,90,.08)",
-                padding: "24px 26px",
-                animation: "drift 5s ease-in-out infinite",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
-                <span className="font-mono" style={{ width: 42, height: 42, display: "grid", placeItems: "center", background: "linear-gradient(135deg,#4d8cff,#1e54d0)", borderRadius: 10, fontSize: 12, fontWeight: 700, color: "#fff" }}>
+        <div className="mn-checkout-grid" style={{ display: "grid", gridTemplateColumns: "minmax(420px, 42%) 1fr", minHeight: "calc(100vh - 58px)" }}>
+          {/* LEFT — order, a full-height brand panel */}
+          <div style={{ position: "relative", overflow: "hidden", background: "linear-gradient(160deg,#3d7bff 0%,#2b6bf3 46%,#1a3fa0 100%)", color: "#fff", padding: "48px 54px", display: "flex", flexDirection: "column", justifyContent: "center", animation: "rise .6s .05s both" }}>
+            <div style={{ position: "absolute", top: -90, right: -90, width: 380, height: 380, borderRadius: "50%", background: "radial-gradient(circle,rgba(255,255,255,.16),transparent 70%)" }} />
+            <div style={{ position: "relative", width: "100%", maxWidth: 440, margin: "0 auto" }}>
+              <div className="font-mono" style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".16em", color: "rgba(255,255,255,.72)" }}>
+                YOUR ORDER
+              </div>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginTop: 22 }}>
+                <span className="font-mono" style={{ width: 46, height: 46, flex: "none", display: "grid", placeItems: "center", background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.32)", borderRadius: 12, fontSize: 13, fontWeight: 700, color: "#fff" }}>
                   {(plan?.vendor ?? "TS").slice(0, 2).toUpperCase()}
                 </span>
-                <span>
-                  <span className="font-body" style={{ display: "block", fontSize: 17, fontWeight: 700 }}>
-                    {plan?.name ?? "Subscription"}
-                  </span>
-                  <span className="font-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>
-                    {(plan?.category ?? "").toUpperCase()} · MONTHLY
-                  </span>
-                </span>
-                <span className="font-mono" style={{ marginLeft: "auto", fontSize: 20, fontWeight: 700 }}>
-                  {formatUsd(plan?.priceCents ?? 0)}
-                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: disp, fontWeight: 800, fontSize: 24, lineHeight: 1.1 }}>{plan?.name ?? "Subscription"}</div>
+                  <div className="font-mono" style={{ fontSize: 10.5, color: "rgba(255,255,255,.68)", marginTop: 4 }}>{(plan?.category ?? "").toUpperCase()} · MONTHLY</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontFamily: disp, fontWeight: 800, fontSize: 26 }}>{formatUsd(plan?.priceCents ?? 0)}</div>
+                  <div className="font-mono" style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", letterSpacing: ".06em" }}>PER MONTH</div>
+                </div>
               </div>
-              <div className="font-mono" style={{ display: "grid", gap: 9, marginTop: 20, paddingTop: 18, borderTop: "1px dashed var(--line)", fontSize: 11, color: "var(--muted)" }}>
+              <div className="font-mono" style={{ display: "grid", gap: 12, marginTop: 26, paddingTop: 22, borderTop: "1px solid rgba(255,255,255,.18)", fontSize: 11.5, color: "rgba(255,255,255,.9)" }}>
                 {feats.map((f) => (
-                  <div key={f} style={{ display: "flex", justifyContent: "space-between" }}>
+                  <div key={f} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span>{f}</span>
-                    <Icon.check size={12} color="var(--green)" sw={2.5} />
+                    <Icon.check size={13} color="#9ef7c8" sw={2.8} />
                   </div>
                 ))}
               </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 20, background: "#fff", border: "1px solid var(--line)", borderRadius: 10, padding: "13px 16px" }}>
-              <Icon.shieldCheck size={15} />
-              <span className="font-mono" style={{ fontSize: 11, letterSpacing: ".06em", color: "var(--muted)" }}>
-                MANDATE RE-CHECKED BEFORE CHARGE
-              </span>
-              <span className="font-mono" style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, color: "var(--green)" }}>
-                PASS
-              </span>
-            </div>
-            <div className="font-mono" style={{ marginTop: 26, fontSize: 10.5, letterSpacing: ".06em", color: "var(--faint)" }}>
-              BILLED MONTHLY · CANCEL ANYTIME · SANDBOX MODE
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 26, background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.22)", borderRadius: 10, padding: "13px 16px" }}>
+                <Icon.shieldCheck size={15} color="#fff" />
+                <span className="font-mono" style={{ fontSize: 11, letterSpacing: ".05em", color: "rgba(255,255,255,.92)" }}>MANDATE RE-CHECKED BEFORE CHARGE</span>
+                <span className="font-mono" style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, color: "#9ef7c8" }}>PASS</span>
+              </div>
+              <div className="font-mono" style={{ marginTop: 22, fontSize: 10.5, letterSpacing: ".06em", color: "rgba(255,255,255,.6)" }}>
+                BILLED MONTHLY · CANCEL ANYTIME · SANDBOX MODE
+              </div>
             </div>
           </div>
 
-          {/* payment — the real Hyperswitch SDK */}
-          <div className="mn-checkout-payment" style={{ padding: "48px 44px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-            <div style={{ fontFamily: disp, fontWeight: 800, fontSize: 26, letterSpacing: "-.01em" }}>Pay with card</div>
-            <p className="font-mono" style={{ margin: "8px 0 20px", fontSize: 10.5, letterSpacing: ".06em", color: "var(--faint)" }}>
-              TEST CARD 4242 4242 4242 4242 · ANY FUTURE EXPIRY · ANY CVC
-            </p>
-            <CheckoutClient planId={planId} amountLabel={usd(plan?.priceCents)} />
-            <div className="font-mono" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 16, fontSize: 10, letterSpacing: ".08em", color: "var(--faint)" }}>
-              PCI DSS · TOKENIZED · JUSPAY HYPERSWITCH
+          {/* RIGHT — the real Hyperswitch SDK */}
+          <div className="mn-checkout-payment" style={{ position: "relative", overflow: "hidden", background: "#fff", padding: "48px 56px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            <div style={{ position: "absolute", inset: 0, background: "radial-gradient(600px 300px at 70% 0,rgba(77,140,255,.06),transparent)" }} />
+            <div style={{ position: "relative", width: "100%", maxWidth: 440, margin: "0 auto" }}>
+              <div style={{ fontFamily: disp, fontWeight: 800, fontSize: 30, letterSpacing: "-.01em" }}>Pay with card</div>
+              <p className="font-mono" style={{ margin: "10px 0 24px", fontSize: 10.5, letterSpacing: ".06em", color: "var(--faint)" }}>
+                TEST CARD 4242 4242 4242 4242 · ANY FUTURE EXPIRY · ANY CVC
+              </p>
+              <CheckoutClient planId={planId} amountLabel={usd(plan?.priceCents)} />
+              <div className="font-mono" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 20, fontSize: 10, letterSpacing: ".08em", color: "var(--faint)" }}>
+                PCI DSS · TOKENIZED · JUSPAY HYPERSWITCH
+              </div>
             </div>
           </div>
-        </div>
         </div>
       </div>
     </main>

@@ -1,21 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { rankProposal, runProcurement } from "@/lib/agent/procure";
+import { decide, rankProposal, runProcurement } from "@/lib/agent/procure";
 import { formatUsd } from "@/lib/catalog";
 import { getSubscriptions } from "@/lib/store";
-import { DEMO_CUSTOMER } from "@/lib/constants";
+import { ensureSessionCustomerId } from "@/lib/session";
 import { contextPrompt, enrichProfileContext } from "@/lib/profile/context";
 import { buildPreferenceProfile, preferenceProfilePrompt } from "@/lib/memory/profile";
 import { addEvent, addFact, addSource } from "@/lib/memory/store";
 import type { RankedPlan } from "@/lib/agent/ranking";
 import { runScoutPanel } from "@/lib/agent/scouts";
 import { getSessionIntentMandate } from "@/lib/mandate-session";
+import {
+  applyProcurementRefinement,
+  refinementPrompt,
+  RefinementModeSchema,
+} from "@/lib/agent/refinement";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const BodySchema = z.object({
   request: z.string().min(3).max(2000),
+  refinement: z
+    .object({
+      mode: RefinementModeSchema,
+      feedback: z.string().min(1).max(500),
+      previousPlanId: z.string().min(1).max(120),
+    })
+    .optional(),
   context: z
     .object({
       profileSummary: z.string().max(1200).optional(),
@@ -62,24 +74,44 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const customerId = await ensureSessionCustomerId();
     const context = await enrichProfileContext(parsed.data.context ?? {});
-    const profile = await buildPreferenceProfile(DEMO_CUSTOMER);
+    const profile = await buildPreferenceProfile(customerId);
     const profileBlock = preferenceProfilePrompt(profile);
+    const refinementBlock = parsed.data.refinement
+      ? `\n\n${refinementPrompt(parsed.data.refinement)}`
+      : "";
     const agentRequest =
-      `${parsed.data.request}\n\n${contextPrompt(context)}` + (profileBlock ? `\n\n${profileBlock}` : "");
-    const existing = await getSubscriptions(DEMO_CUSTOMER);
+      `${parsed.data.request}\n\n${contextPrompt(context)}` +
+      (profileBlock ? `\n\n${profileBlock}` : "") +
+      refinementBlock;
+    const existing = await getSubscriptions(customerId);
     const intent = await getSessionIntentMandate();
-    const result = await runProcurement(agentRequest, DEMO_CUSTOMER, {
+    const agentResult = await runProcurement(agentRequest, customerId, {
       defaultPriority: profile.priorityLean,
       intent,
     });
-    const rankings = result.proposal ? rankProposal(result.proposal, existing, intent).slice(0, 3) : [];
+    const applied = agentResult.proposal && parsed.data.refinement
+      ? applyProcurementRefinement(agentResult.proposal, parsed.data.refinement)
+      : null;
+    const proposal = applied?.proposal ?? agentResult.proposal;
+    const rankingOptions = { excludedPlanIds: applied?.excludedPlanIds ?? [] };
+    const result = {
+      ...agentResult,
+      proposal,
+      decision: decide(proposal, existing, intent, rankingOptions),
+    };
+    const rankings = proposal
+      ? rankProposal(proposal, existing, intent, rankingOptions).slice(0, 3)
+      : [];
     const candidates = rankings.map(candidateView);
-    const scouts = result.proposal
+    const scouts = proposal
       ? await runScoutPanel({
-          request: parsed.data.request,
-          capability: result.proposal.requested_capability,
-          requirements: result.proposal.normalized_requirements,
+          request: parsed.data.refinement
+            ? `${parsed.data.request}\nRefinement: ${parsed.data.refinement.feedback}`
+            : parsed.data.request,
+          capability: proposal.requested_capability,
+          requirements: proposal.normalized_requirements,
           rankings,
           abortSignal: req.signal,
         })
@@ -89,12 +121,12 @@ export async function POST(req: NextRequest) {
     // hasn't opted in, these are silent no-ops.
     const ctxIn = parsed.data.context;
     if (ctxIn?.projectSummary)
-      await addFact(DEMO_CUSTOMER, { kind: "project", value: ctxIn.projectSummary.slice(0, 300), source: "user" });
+      await addFact(customerId, { kind: "project", value: ctxIn.projectSummary.slice(0, 300), source: "user" });
     if (ctxIn?.profileSummary)
-      await addFact(DEMO_CUSTOMER, { kind: "experience", value: ctxIn.profileSummary.slice(0, 300), source: "user" });
-    for (const repo of ctxIn?.githubRepos ?? []) await addSource(DEMO_CUSTOMER, { kind: "github", ref: repo });
+      await addFact(customerId, { kind: "experience", value: ctxIn.profileSummary.slice(0, 300), source: "user" });
+    for (const repo of ctxIn?.githubRepos ?? []) await addSource(customerId, { kind: "github", ref: repo });
     if (result.decision.selected_plan_id) {
-      await addEvent(DEMO_CUSTOMER, {
+      await addEvent(customerId, {
         capability: result.proposal?.requested_capability ?? "unknown",
         planId: result.decision.selected_plan_id,
         action: "recommended",

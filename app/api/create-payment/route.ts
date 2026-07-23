@@ -3,8 +3,8 @@ import { z } from "zod";
 import { initiateSubscription, hyperswitchClient } from "@/lib/checkout";
 import { getPlan } from "@/lib/catalog";
 import { addEvent } from "@/lib/memory/store";
-import { DEMO_CUSTOMER } from "@/lib/constants";
 import { getSessionIntentMandate } from "@/lib/mandate-session";
+import { ensureSessionCustomerId } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -27,10 +27,11 @@ export async function POST(req: NextRequest) {
   try {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     const intent = await getSessionIntentMandate();
+    const customerId = await ensureSessionCustomerId();
     const result = await initiateSubscription(
       {
         planId: parsed.data.planId,
-        customerId: DEMO_CUSTOMER,
+        customerId,
         returnUrl: `${appUrl}/checkout/complete`,
         intent,
       },
@@ -41,11 +42,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ refused: true, verdict: result.verdict }, { status: 403 });
     }
 
+    // Already subscribed -> no charge; the client shows an "already active" panel.
+    if (result.alreadyActive) {
+      return NextResponse.json({ alreadyActive: true, paymentId: result.paymentId, status: "active" });
+    }
+
     // Remember the choice (consent-gated no-op otherwise). Kept at the route layer so
     // the payment path never imports preference memory.
     const plan = getPlan(parsed.data.planId);
     if (plan) {
-      await addEvent(DEMO_CUSTOMER, {
+      await addEvent(customerId, {
         capability: plan.capability,
         planId: plan.id,
         action: "selected",

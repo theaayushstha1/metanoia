@@ -12,6 +12,7 @@ export type RankingPriority = "cost" | "balanced" | "reliability" | "throughput"
 export interface NormalizedRequirements {
   max_price_cents?: number | null;
   min_rps?: number | null;
+  min_uptime_pct?: number | null;
   needs_realtime?: boolean;
   needs_websockets?: boolean;
   required_features?: string[];
@@ -31,6 +32,10 @@ export interface RankedPlan {
     throughput: number;
   };
   tradeoff: string;
+}
+
+export interface RankingOptions {
+  excludedPlanIds?: readonly string[];
 }
 
 const WEIGHTS: Record<RankingPriority, [number, number, number, number]> = {
@@ -77,7 +82,8 @@ export function rankPlans(
   capability: Capability,
   requirements: NormalizedRequirements,
   existing: ExistingSubscription[],
-  intent: IntentMandate = getIntentMandate()
+  intent: IntentMandate = getIntentMandate(),
+  options: RankingOptions = {}
 ): RankedPlan[] {
   const required = requiredFeatures(requirements);
   const priority = requirements.priority ?? "balanced";
@@ -93,7 +99,9 @@ export function rankPlans(
   );
   const throughputTarget = Math.max(1, requirements.min_rps ?? 50);
 
-  return CATALOG.filter((plan) => plan.capability === capability)
+  const excluded = new Set(options.excludedPlanIds ?? []);
+
+  return CATALOG.filter((plan) => plan.capability === capability && !excluded.has(plan.id))
     .map((plan): RankedPlan => {
       const hardFailures: string[] = [];
       if (requirements.max_price_cents != null && plan.priceCents > requirements.max_price_cents) {
@@ -101,6 +109,9 @@ export function rankPlans(
       }
       if (requirements.min_rps != null && (plan.maxRps ?? 0) < requirements.min_rps) {
         hardFailures.push(`${plan.maxRps ?? 0} req/s is below ${requirements.min_rps}`);
+      }
+      if (requirements.min_uptime_pct != null && (plan.uptimePct ?? 0) < requirements.min_uptime_pct) {
+        hardFailures.push(`${plan.uptimePct ?? 0}% uptime is below ${requirements.min_uptime_pct.toFixed(3)}%`);
       }
       for (const feature of required) {
         if (!plan.features.includes(feature)) hardFailures.push(`missing ${feature.replace(/_/g, " ")}`);

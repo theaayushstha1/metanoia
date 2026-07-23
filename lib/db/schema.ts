@@ -49,11 +49,23 @@ export const credentials = pgTable(
   (t) => [uniqueIndex("credentials_owner_idx").on(t.customerId, t.planId)]
 );
 
+/** Latest refund state per payment, so the lab can show it after a page reload. */
+export const refunds = pgTable("refunds", {
+  paymentId: text("payment_id").primaryKey(),
+  refundId: text("refund_id").notNull(),
+  status: text("status").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+});
+
 /** Every webhook is retained (raw payload) even if we can't act on it yet. */
 export const events = pgTable("events", {
   eventId: text("event_id").primaryKey(),
   eventType: text("event_type"),
   paymentId: text("payment_id"),
+  /** Preserved so the reconciliation sweep can settle with full fidelity. */
+  paymentMethodId: text("payment_method_id"),
+  eventUpdatedAt: bigint("event_updated_at", { mode: "number" }),
   raw: jsonb("raw"),
   processed: boolean("processed").notNull().default(false),
   receivedAt: bigint("received_at", { mode: "number" }).notNull(),

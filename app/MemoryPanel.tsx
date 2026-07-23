@@ -175,7 +175,7 @@ function Remembered({ snap, onDelete }: { snap: Snapshot; onDelete: (id: string)
     ...snap.facts.map((f) => ({ id: f.id, label: `${f.kind}: ${f.value}`, tag: f.source })),
     ...snap.events.map((e) => ({
       id: e.id,
-      label: `${e.action} · ${e.planId}${e.reason ? ` — ${e.reason}` : ""}`,
+      label: `${e.action} · ${e.planId}${e.reason ? `: ${e.reason}` : ""}`,
       tag: e.capability,
     })),
   ];

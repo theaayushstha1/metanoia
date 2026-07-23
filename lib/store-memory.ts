@@ -18,6 +18,7 @@ import type { ExistingSubscription } from "@/lib/agent/spendCap";
 import {
   credentialFor,
   type Attempt,
+  type RefundRecord,
   type Store,
   type WebhookInput,
   type WebhookOutcome,
@@ -26,6 +27,9 @@ import {
 interface EventRow {
   eventType?: string;
   paymentId?: string;
+  /** Preserved so the reconciliation sweep can settle with full fidelity. */
+  paymentMethodId?: string;
+  eventUpdatedAt?: number;
   raw: unknown;
   processed: boolean;
   receivedAt: number;
@@ -41,6 +45,7 @@ interface Snapshot {
   appliedEventTs: Record<string, number>;
   credentials: Record<string, { customerId: string; planId: string }>;
   events: Record<string, EventRow>;
+  refunds: Record<string, RefundRecord>;
 }
 
 export class InMemoryStore implements Store {
@@ -49,6 +54,7 @@ export class InMemoryStore implements Store {
   private appliedEventTs = new Map<string, number>();
   private credentials = new Map<string, { customerId: string; planId: string }>();
   private events = new Map<string, EventRow>();
+  private refunds = new Map<string, RefundRecord>();
 
   constructor() {
     this.load();
@@ -63,6 +69,7 @@ export class InMemoryStore implements Store {
       this.appliedEventTs = new Map(Object.entries(s.appliedEventTs ?? {}));
       this.credentials = new Map(Object.entries(s.credentials ?? {}));
       this.events = new Map(Object.entries(s.events ?? {}));
+      this.refunds = new Map(Object.entries(s.refunds ?? {}));
     } catch {
       // no file yet / unreadable -> start empty
     }
@@ -76,6 +83,7 @@ export class InMemoryStore implements Store {
       appliedEventTs: Object.fromEntries(this.appliedEventTs),
       credentials: Object.fromEntries(this.credentials),
       events: Object.fromEntries(this.events),
+      refunds: Object.fromEntries(this.refunds),
     };
     try {
       fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -114,6 +122,13 @@ export class InMemoryStore implements Store {
   async getAttempt(paymentId: string): Promise<Attempt | undefined> {
     this.load();
     return this.attempts.get(paymentId);
+  }
+
+  async listAttempts(customerId: string): Promise<Attempt[]> {
+    this.load();
+    return [...this.attempts.values()]
+      .filter((a) => a.customerId === customerId)
+      .sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
   /** Returns true if this call transitioned the attempt to succeeded (first time). */
@@ -168,6 +183,31 @@ export class InMemoryStore implements Store {
     }
   }
 
+  async recordRefund(r: RefundRecord): Promise<void> {
+    this.load();
+    this.refunds.set(r.paymentId, r);
+    this.save();
+  }
+
+  async getRefundRecord(paymentId: string): Promise<RefundRecord | undefined> {
+    this.load();
+    return this.refunds.get(paymentId);
+  }
+
+  async cancelSubscription(customerId: string, planId: string): Promise<boolean> {
+    this.load();
+    const list = this.subscriptions.get(customerId) ?? [];
+    const next = list.filter((s) => s.plan_id !== planId);
+    if (next.length === list.length) return false;
+    this.subscriptions.set(customerId, next);
+    // Revoke the capability credential too, so access actually stops.
+    for (const [cred, owner] of this.credentials) {
+      if (owner.customerId === customerId && owner.planId === planId) this.credentials.delete(cred);
+    }
+    this.save();
+    return true;
+  }
+
   async getSavedPaymentMethod(customerId: string, planId: string): Promise<string | undefined> {
     this.load();
     for (const a of this.attempts.values()) {
@@ -193,13 +233,19 @@ export class InMemoryStore implements Store {
 
   async processWebhook(input: WebhookInput): Promise<WebhookOutcome> {
     this.load();
-    if (input.eventId && this.events.has(input.eventId)) {
+    const existing = input.eventId ? this.events.get(input.eventId) : undefined;
+    // Only a FULLY-PROCESSED event is a true duplicate. A retained (processed=false)
+    // event is reprocessed on redelivery so a payment that was unknown when the event
+    // first arrived can still recover — otherwise the retained event is unrecoverable.
+    if (existing && existing.processed) {
       return { duplicate: true, applied: false };
     }
-    if (input.eventId) {
+    if (input.eventId && !existing) {
       this.events.set(input.eventId, {
         eventType: input.eventType,
         paymentId: input.paymentId,
+        paymentMethodId: input.paymentMethodId,
+        eventUpdatedAt: input.updatedAt,
         raw: input.raw,
         processed: false,
         receivedAt: Date.now(),
@@ -208,16 +254,19 @@ export class InMemoryStore implements Store {
 
     let applied = false;
     let reason: string | undefined;
+    const paymentKnown = input.paymentId ? this.attempts.has(input.paymentId) : false;
     if (input.eventType === "payment_succeeded" && input.paymentId) {
       applied = this.settleSucceeded(input.paymentId, {
         updatedAt: input.updatedAt,
         paymentMethodId: input.paymentMethodId,
       });
-      if (!applied) reason = "unknown or already-applied payment (retained)";
+      if (!applied) reason = paymentKnown ? "already applied" : "unknown payment (retained)";
     }
 
     const actionable = input.eventType === "payment_succeeded";
-    const known = applied || !actionable;
+    // Mark processed when handled: applied now, non-actionable, or the payment is known
+    // (already settled). A genuinely unknown payment stays processed=false for recovery.
+    const known = applied || !actionable || paymentKnown;
     if (input.eventId && known) {
       const row = this.events.get(input.eventId);
       if (row) row.processed = true;
@@ -226,12 +275,31 @@ export class InMemoryStore implements Store {
     return { duplicate: false, applied, reason };
   }
 
+  async reconcilePendingEvents(): Promise<number> {
+    this.load();
+    let settled = 0;
+    for (const [eventId, row] of this.events) {
+      if (row.processed || row.eventType !== "payment_succeeded" || !row.paymentId) continue;
+      if (!this.attempts.has(row.paymentId)) continue; // still unknown -> keep retained
+      const applied = this.settleSucceeded(row.paymentId, {
+        updatedAt: row.eventUpdatedAt,
+        paymentMethodId: row.paymentMethodId,
+      });
+      row.processed = true; // payment is now known; the event is handled either way
+      if (applied) settled++;
+      void eventId;
+    }
+    this.save();
+    return settled;
+  }
+
   async reset(): Promise<void> {
     this.subscriptions.clear();
     this.attempts.clear();
     this.appliedEventTs.clear();
     this.credentials.clear();
     this.events.clear();
+    this.refunds.clear();
     this.save();
   }
 }

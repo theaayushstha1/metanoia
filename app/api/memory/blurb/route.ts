@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { DEMO_CUSTOMER } from "@/lib/constants";
+import { getSessionCustomerId } from "@/lib/session";
 import { buildPreferenceProfile, generateAboutBlurb } from "@/lib/memory/profile";
 
 export const runtime = "nodejs";
@@ -11,7 +11,7 @@ export const maxDuration = 30;
  * when the memory panel asks for it — never on the procurement hot path.
  */
 export async function GET() {
-  const profile = await buildPreferenceProfile(DEMO_CUSTOMER);
+  const profile = await buildPreferenceProfile(await getSessionCustomerId());
   const blurb = await generateAboutBlurb(profile);
   return NextResponse.json({ blurb });
 }

@@ -53,6 +53,7 @@ export const recordAttempt = (a: {
   amountCents: number;
 }) => store().recordAttempt(a);
 export const getAttempt = (paymentId: string) => store().getAttempt(paymentId);
+export const listAttempts = (customerId: string) => store().listAttempts(customerId);
 export const markPaymentSucceeded = (
   paymentId: string,
   opts?: { updatedAt?: number; paymentMethodId?: string }
@@ -60,10 +61,15 @@ export const markPaymentSucceeded = (
 export const markPaymentFailed = (paymentId: string) => store().markPaymentFailed(paymentId);
 export const getSavedPaymentMethod = (customerId: string, planId: string) =>
   store().getSavedPaymentMethod(customerId, planId);
+export const cancelSubscription = (customerId: string, planId: string) =>
+  store().cancelSubscription(customerId, planId);
+export const recordRefund = (r: import("@/lib/db/store-contract").RefundRecord) => store().recordRefund(r);
+export const getRefundRecord = (paymentId: string) => store().getRefundRecord(paymentId);
 export const getCredential = (customerId: string, planId: string) =>
   store().getCredential(customerId, planId);
 export const resolveCredential = (cred: string) => store().resolveCredential(cred);
 export const processWebhook = (input: WebhookInput) => store().processWebhook(input);
+export const reconcilePendingEvents = () => store().reconcilePendingEvents();
 
 /** Test/util: wipe all state in the active backend. */
 export async function __resetStore(): Promise<void> {

@@ -133,10 +133,10 @@ function Skeleton() {
   );
 }
 
-function Chip({ children, tone = "blue" }: { children: React.ReactNode; tone?: "blue" | "green" }) {
-  const c = tone === "green" ? "#39d98a" : "#4d8cff";
+function Chip({ children, tone = "blue" }: { children: React.ReactNode; tone?: "blue" | "green" | "red" }) {
+  const c = tone === "green" ? "#39d98a" : tone === "red" ? "#ff6b6b" : "#4d8cff";
   return (
-    <span className="font-mono" style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: ".08em", color: c, background: "rgba(77,140,255,.1)", border: `1px solid ${c}33`, borderRadius: 99, padding: "4px 9px" }}>
+    <span className="font-mono" style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: ".08em", color: c, background: `${c}1a`, border: `1px solid ${c}33`, borderRadius: 99, padding: "4px 9px" }}>
       {children}
     </span>
   );
@@ -202,31 +202,48 @@ function Transcription({ data }: { data: Data }) {
       {!typing && (
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
           <Chip tone="green">{Math.round(Number(data.confidence ?? 0) * 100)}% confidence</Chip>
-          <Chip>{String(data.words ?? "—")} words</Chip>
+          <Chip>{String(data.words ?? "n/a")} words</Chip>
         </div>
       )}
     </div>
   );
 }
 
-/* ── market-data: ticker + sparkline ────────────────────────────────────── */
+/* ── market-data: ticker + sparkline (draws the real returned series) ────── */
 function MarketData({ data }: { data: Data }) {
   const price = useCountUp(Number(data.price ?? 0));
-  const pts = [8, 14, 10, 18, 12, 22, 17, 26, 21, 30];
-  const path = pts.map((p, i) => `${(i / (pts.length - 1)) * 260},${40 - p}`).join(" ");
+  const series = (Array.isArray(data.series) ? (data.series as number[]) : []).filter((n) => Number.isFinite(n));
+  const change = Number(data.change ?? 0);
+  const pct = Number(data.change_pct ?? 0);
+  const up = change >= 0;
+  const stroke = up ? "#39d98a" : "#ff6b6b";
+
+  // scale the actual price series into the 260x40 viewBox
+  const lo = series.length ? Math.min(...series) : 0;
+  const hi = series.length ? Math.max(...series) : 1;
+  const span = hi - lo || 1;
+  const path = series
+    .map((p, i) => `${(i / Math.max(1, series.length - 1)) * 260},${38 - ((p - lo) / span) * 34}`)
+    .join(" ");
+
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-        <span className="font-mono" style={{ fontSize: 13, fontWeight: 700, letterSpacing: ".1em", color: "#7c8598" }}>{String(data.symbol ?? "—")}</span>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+        <span className="font-mono" style={{ fontSize: 13, fontWeight: 700, letterSpacing: ".1em", color: "#7c8598" }}>{String(data.symbol ?? "n/a")}</span>
         <span style={{ fontSize: 30, fontWeight: 800, color: "#f4f2ec", fontVariantNumeric: "tabular-nums" }}>${price.toFixed(2)}</span>
-        <Chip tone="green">▲ live</Chip>
+        <Chip tone={up ? "green" : "red"}>
+          {up ? "▲" : "▼"} {up ? "+" : ""}{change.toFixed(2)} ({pct.toFixed(2)}%)
+        </Chip>
       </div>
       <svg width="100%" viewBox="0 0 260 44" preserveAspectRatio="none" style={{ height: 60, marginTop: 12 }}>
-        <polyline points={path} fill="none" stroke="#4d8cff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ strokeDasharray: 600, strokeDashoffset: 600, animation: "mndraw 1.2s ease-out .2s forwards" }} />
+        {path && (
+          <polyline points={path} fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ strokeDasharray: 600, strokeDashoffset: 600, animation: "mndraw 1.2s ease-out .2s forwards" }} />
+        )}
       </svg>
-      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-        <Chip>bid {String(data.bid ?? "—")}</Chip>
-        <Chip>ask {String(data.ask ?? "—")}</Chip>
+      <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+        <Chip>bid {String(data.bid ?? "n/a")}</Chip>
+        <Chip>ask {String(data.ask ?? "n/a")}</Chip>
+        <span className="font-mono" style={{ fontSize: 9.5, letterSpacing: ".06em", color: "#5a6478" }}>SANDBOX FEED · {String(data.currency ?? "USD")}</span>
       </div>
     </div>
   );
@@ -299,7 +316,7 @@ function Compute({ data }: { data: Data }) {
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         <Chip tone="green">{n} GPUs online</Chip>
-        <Chip>region {String(data.region ?? "—")}</Chip>
+        <Chip>region {String(data.region ?? "n/a")}</Chip>
       </div>
     </div>
   );
