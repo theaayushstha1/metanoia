@@ -1,12 +1,12 @@
 <!-- banner -->
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="Metanoia — give your agent a budget, not your card" width="100%" />
+  <img src="docs/assets/banner.svg" alt="Metanoia: give your agent a budget, not your card" width="100%" />
 </p>
 
 <h1 align="center">Metanoia</h1>
 
 <p align="center">
-  <b>An AI agent that buys and governs API/software subscriptions under a spending mandate — settled through Juspay Hyperswitch.</b><br/>
+  <b>An AI agent that buys and governs API/software subscriptions under a spending mandate, settled through Juspay Hyperswitch.</b><br/>
   <i>The model proposes. A deterministic server decides. Nothing unverified moves money.</i>
 </p>
 
@@ -36,18 +36,18 @@
 ---
 
 <p align="center">
-  <img src="docs/assets/metanoia-demo.gif" alt="Metanoia demo — procurement, ranking, checkout, capability proof" width="90%" />
+  <img src="docs/assets/metanoia-demo.gif" alt="Metanoia demo: procurement, ranking, checkout, capability proof" width="90%" />
 </p>
 
 ---
 
 ## What is Metanoia?
 
-Autonomous agents increasingly need to **spend money** — subscribing to APIs, renewing tools, buying compute. Handing an agent a raw credit card is reckless. Metanoia is the missing primitive: a **safe delegation envelope**.
+Autonomous agents increasingly need to **spend money** by subscribing to APIs, renewing tools, and buying compute. Handing an agent a raw credit card is reckless. Metanoia is the missing primitive: a **safe delegation envelope**.
 
-You give the agent a **capability you need** and a **spending mandate** (default: `$60/mo` total, `$40` per charge, `3` subscriptions max — editable in the workbench). It shops a curated marketplace, ranks the best offers with a **deterministic formula** (not the model's opinion), runs **four parallel analyst "scouts"**, checks the winner against a **deterministic gate (SpendGuard)** that refuses over-budget purchases *before any money moves*, asks you to confirm, then **settles through Juspay Hyperswitch** and proves the capability works by calling it live.
+You give the agent a **capability you need** and a **spending mandate** (default: `$60/mo` total, `$40` per charge, `3` subscriptions max, editable in the workbench). It shops a curated marketplace, ranks the best offers with a **deterministic formula** (not the model's opinion), runs **four parallel analyst "scouts"**, checks the winner against a **deterministic gate (SpendGuard)** that refuses over-budget purchases *before any money moves*, asks you to confirm, then **settles through Juspay Hyperswitch** and proves the capability works by calling it live.
 
-> **The core safety idea:** the language model can research, compare, and recommend, but it can **never** set a price, choose the final plan, or move money. A deterministic ranker and SpendGuard are the only authority. *Metanoia* (Greek: a fundamental turning of the mind) is the thesis — a change in how software gets bought.
+> **The core safety idea:** the language model can research, compare, and recommend, but it can **never** set a price, choose the final plan, or move money. A deterministic ranker and SpendGuard are the only authority. *Metanoia* (Greek: a fundamental turning of the mind) is the thesis: a change in how software gets bought.
 
 ---
 
@@ -57,7 +57,7 @@ You give the agent a **capability you need** and a **spending mandate** (default
 flowchart LR
     U([You: capability + mandate]) --> A
 
-    subgraph AGENT["Agent layer — PROPOSES"]
+    subgraph AGENT["Agent layer: PROPOSES"]
         A["Gemini 3.1 Pro<br/>ToolLoopAgent"]
         A -->|list_services| CAT[("Curated catalog<br/>30 offers · 10 capabilities")]
         A -->|check_mandate| SG1[SpendGuard]
@@ -66,12 +66,12 @@ flowchart LR
 
     P --> D
 
-    subgraph SERVER["Decision core — DECIDES (authority)"]
+    subgraph SERVER["Decision core: DECIDES (authority)"]
         D{"decide()"}
         D --> R["Deterministic ranking<br/>fit / price / reliability / throughput"]
         R --> SG["SpendGuard verdict<br/>caps, in order"]
         SG -->|approved| PICK["Highest-ranked ELIGIBLE plan"]
-        SG -->|refused| DENY["Denied — no charge"]
+        SG -->|refused| DENY["Denied: no charge"]
     end
 
     R -.same shortlist.-> SCOUTS["4 parallel scouts<br/>Price / Value / Quality / Market<br/>advisory only"]
@@ -96,7 +96,7 @@ flowchart LR
 
 ### 1) Deterministic ranking (the model does not score)
 
-A fixed formula runs on **server-owned catalog numbers** — reproducible and explainable. Weights shift with the requested priority:
+A fixed formula runs on **server-owned catalog numbers**. It is reproducible and explainable. Weights shift with the requested priority:
 
 | priority | fit | price | reliability | throughput |
 |---|---:|---:|---:|---:|
@@ -107,7 +107,7 @@ A fixed formula runs on **server-owned catalog numbers** — reproducible and ex
 
 `score = fit·w1 + priceEfficiency·w2 + reliability·w3 + throughput·w4` → the highest-ranked **eligible** plan wins. Hard failures (over budget, below min throughput, missing feature) make a plan ineligible regardless of score. *(see `lib/agent/ranking.ts`)*
 
-### 2) SpendGuard — the Spending Constitution
+### 2) SpendGuard: the Spending Constitution
 
 ```mermaid
 flowchart TD
@@ -125,7 +125,7 @@ flowchart TD
     X --> UI[["Denied screen<br/>failing check shown · card never touched"]]
 ```
 
-Every autonomous purchase is checked **in order, before any money moves**, and the checkout route re-runs SpendGuard and returns `403` before Hyperswitch is ever contacted. A refusal is a first-class, explainable outcome — not an error. *(see `lib/agent/spendCap.ts`)*
+Every autonomous purchase is checked **in order, before any money moves**, and the checkout route re-runs SpendGuard and returns `403` before Hyperswitch is ever contacted. A refusal is a first-class, explainable outcome, not an error. *(see `lib/agent/spendCap.ts`)*
 
 ---
 
@@ -157,7 +157,7 @@ sequenceDiagram
 
     B->>R: confirm plan
     R->>CO: initiateSubscription()
-    CO->>CO: SpendGuard (server) — refuse ⇒ 403, stop
+    CO->>CO: SpendGuard (server): refuse ⇒ 403, stop
     CO->>HS: POST /payments (confirm:false, stable id)
     HS-->>CO: intent + client_secret
     CO->>S: record pending attempt (id Hyperswitch used)
@@ -175,7 +175,7 @@ sequenceDiagram
 
 ---
 
-## Data model — payments and memory are walled off
+## Data model: payments and memory are walled off
 
 ```mermaid
 erDiagram
@@ -242,26 +242,26 @@ Payment tables live in `public.*`; preference memory lives in a **separate `memo
 |---|---|
 | ![checkout](docs/assets/05-checkout.png) | ![receipt](docs/assets/06-receipt.png) |
 
-### The finish — buy, then prove the capability
+### The finish: buy, then prove the capability
 
 <p align="center">
-  <img src="docs/assets/receipt-animation.gif" alt="Receipt — animated tick-mark reveal and live capability proof" width="82%" />
+  <img src="docs/assets/receipt-animation.gif" alt="Receipt: animated tick-mark reveal and live capability proof" width="82%" />
 </p>
 
-On success the receipt makes a **real credentialed call** to the purchased capability's protected sandbox endpoint and animates the response — here, a transcription waveform typing out its text — under a staggered *Mandate re-checked → Credential issued → Capability online* tick sequence.
+On success the receipt makes a **real credentialed call** to the purchased capability's protected sandbox endpoint and animates the response. Here, a transcription waveform types out its text under a staggered *Mandate re-checked → Credential issued → Capability online* tick sequence.
 
 ---
 
 ## Feature highlights
 
-- **Agentic procurement** — Gemini 3.1 Pro on Vertex proposes; a deterministic core decides.
-- **SpendGuard** — mandate enforced before any charge; refusals are explainable.
-- **Four advisory scouts** — price / value / quality / grounded market signal, in parallel.
-- **Real payment rails** — Juspay Hyperswitch (sandbox), idempotent, with signed webhook settlement proven live.
-- **Buy-then-use loop** — a scoped credential + a live authenticated capability proof.
-- **Opt-in preference memory** — consent-gated, deletable, walled off from payments.
-- **Configurable mandate** — caps are editable in the workbench.
-- **95/95 tests** — the safety gate, ranking math, idempotency, ownership, refunds, and webhook recovery are covered.
+- **Agentic procurement:** Gemini 3.1 Pro on Vertex proposes; a deterministic core decides.
+- **SpendGuard:** mandate enforced before any charge; refusals are explainable.
+- **Four advisory scouts:** price / value / quality / grounded market signal, in parallel.
+- **Real payment rails:** Juspay Hyperswitch (sandbox), idempotent, with signed webhook settlement proven live.
+- **Buy-then-use loop:** a scoped credential + a live authenticated capability proof.
+- **Opt-in preference memory:** consent-gated, deletable, walled off from payments.
+- **Configurable mandate:** caps are editable in the workbench.
+- **95/95 tests:** the safety gate, ranking math, idempotency, ownership, refunds, and webhook recovery are covered.
 
 ---
 
@@ -285,7 +285,7 @@ git clone https://github.com/theaayushstha1/metanoia.git
 cd metanoia
 npm install
 
-# configure secrets (never committed) — see .env.local.example
+# configure secrets (never committed); see .env.local.example
 cp .env.local.example .env.local
 # HYPERSWITCH_SECRET_KEY, NEXT_PUBLIC_HYPERSWITCH_PUBLISHABLE_KEY
 # GOOGLE_VERTEX_PROJECT  (+ `gcloud auth application-default login` for local dev)
@@ -304,11 +304,11 @@ Test card at checkout: `4242 4242 4242 4242`, any future expiry, any CVC.
 
 `npm test` → **95/95 across 17 files** (plus `tsc` clean, `lint` clean). The suites prove the parts that must never break:
 
-- **can't overspend** — SpendGuard refuses over-cap purchases; checkout returns 403 without calling Hyperswitch.
-- **can't be tricked** — the server overrides an over-cap model pick; rejects hallucinated / wrong-capability plans.
-- **agent can't touch money** — a test asserts the agent module imports no payment functions.
-- **idempotent** — same period → same payment id; confirming twice records one subscription; stale webhooks ignored.
-- **memory is consent-gated** — nothing stored until opt-in; `deriveProfile` is deterministic; delete works.
+- **can't overspend:** SpendGuard refuses over-cap purchases; checkout returns 403 without calling Hyperswitch.
+- **can't be tricked:** the server overrides an over-cap model pick; rejects hallucinated / wrong-capability plans.
+- **agent can't touch money:** a test asserts the agent module imports no payment functions.
+- **idempotent:** same period means the same payment id; confirming twice records one subscription; stale webhooks are ignored.
+- **memory is consent-gated:** nothing is stored until opt-in; `deriveProfile` is deterministic; delete works.
 
 ---
 
@@ -325,9 +325,9 @@ Test card at checkout: `4242 4242 4242 4242`, any future expiry, any CVC.
 
 ## Roadmap
 
-- **P0 — completed:** Cloud SQL migrations, public Cloud Run deployment, and real signed webhook settlement.
-- **P1 — real recurring:** Stripe MIT off-session charge, automatic renewal scheduler, and decline-code-aware smart retries (Revenue Recovery).
-- **P2 — protocol depth:** signed AP2 Checkout/Payment mandates (JWTs); x402 pay-per-call handshake; smart routing / connector failover; OAuth profile import.
+- **P0 completed:** Cloud SQL migrations, public Cloud Run deployment, and real signed webhook settlement.
+- **P1 real recurring:** Stripe MIT off-session charge, automatic renewal scheduler, and decline-code-aware smart retries (Revenue Recovery).
+- **P2 protocol depth:** signed AP2 Checkout/Payment mandates (JWTs); x402 pay-per-call handshake; smart routing / connector failover; OAuth profile import.
 
 ---
 
@@ -336,7 +336,7 @@ Test card at checkout: `4242 4242 4242 4242`, any future expiry, any CVC.
 | Doc | What's in it |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System, request-flow, payment, and data diagrams; storage design; component map. |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Architecture decision records — every major call, its alternatives, and tradeoffs. |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Architecture decision records: every major call, its alternatives, and tradeoffs. |
 | [`docs/submission/Metanoia-Architecture-Decisions.pdf`](docs/submission/Metanoia-Architecture-Decisions.pdf) | The recruiter-ready architecture and decisions document (3 pages). |
 | [`docs/METANOIA-WALKTHROUGH.md`](docs/METANOIA-WALKTHROUGH.md) · [PDF](docs/METANOIA-WALKTHROUGH.pdf) | The full 18-page technical walkthrough (also a great NotebookLM source). |
 
