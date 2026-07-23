@@ -113,11 +113,14 @@ const PRESETS: Record<string, string> = {
   "market-data":
     "Find the best market-data API: real-time US equities, websockets, ≥60 req/s, under $50/month.",
   news: "I need a news API with LLM summaries, under $20/month.",
+  "vector-search": "Find a vector search API with hybrid search and reranking, under $40/month.",
+  geocoding: "I need a geocoding API for forward and reverse address lookup, under $30/month.",
+  compute: "Find a GPU compute API with L4 GPUs and autoscaling for inference, under $40/month.",
+  transcription: "Find me the best transcription (speech-to-text) service for $10 a month.",
   llm: "Find an LLM inference API with tool calling and long context, under $40/month.",
   email: "I need a transactional email API with delivery webhooks and analytics, under $30/month.",
-  auth: "I need passkey authentication with MFA and social login, under $40/month.",
   observability: "Find an observability API for logs and distributed traces with 30-day retention.",
-  transcription: "Find me the best transcription (speech-to-text) service for $10 a month.",
+  auth: "I need passkey authentication with MFA and social login, under $40/month.",
   "over-budget": "Get me an A100 GPU compute API for large-model training. A100 is a hard requirement.",
 };
 
@@ -613,6 +616,21 @@ function Home({
                   <PresetChip active label="market-data" onClick={() => setRequest(PRESETS["market-data"])}>
                     <Icon.candles size={12} color={blue} />
                   </PresetChip>
+                  <PresetChip label="news" onClick={() => setRequest(PRESETS["news"])}>
+                    <Icon.news size={12} />
+                  </PresetChip>
+                  <PresetChip label="vector-search" onClick={() => setRequest(PRESETS["vector-search"])}>
+                    <Icon.grid size={12} />
+                  </PresetChip>
+                  <PresetChip label="geocoding" onClick={() => setRequest(PRESETS["geocoding"])}>
+                    <Icon.nodes size={12} />
+                  </PresetChip>
+                  <PresetChip label="compute" onClick={() => setRequest(PRESETS["compute"])}>
+                    <Icon.bolt size={12} />
+                  </PresetChip>
+                  <PresetChip label="transcription" onClick={() => setRequest(PRESETS["transcription"])}>
+                    <Icon.card size={12} />
+                  </PresetChip>
                   <PresetChip label="LLM" onClick={() => setRequest(PRESETS["llm"])}>
                     <Icon.sparkle size={12} />
                   </PresetChip>
@@ -623,10 +641,10 @@ function Home({
                     <Icon.lock size={12} />
                   </PresetChip>
                   <PresetChip label="observability" onClick={() => setRequest(PRESETS["observability"])}>
-                    <Icon.nodes size={12} />
+                    <Icon.shield size={12} />
                   </PresetChip>
                   <PresetChip label="over-budget" onClick={() => setRequest(PRESETS["over-budget"])}>
-                    <Icon.grid size={12} />
+                    <Icon.shieldX size={12} />
                   </PresetChip>
                 </div>
                 <button
