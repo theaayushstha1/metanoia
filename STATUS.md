@@ -85,20 +85,22 @@ Project `metanoia-agent-17047`, region `us-east1`.
 - Secrets (Hyperswitch secret key, webhook hash key, DB password) live in Secret Manager, mounted into
   the service. No secret is baked into the image or committed.
 
-### Webhook: receiver verified; sandbox cannot complete outbound delivery
+### Webhook: receiver verified; Hyperswitch->Cloud Run delivery does not land (diagnosed)
 
-- The deployed `/api/webhooks` endpoint VERIFIES signed events: a correct HMAC-SHA512 payload (using the
-  Secret-Manager hash key) returns `200`; a bad or missing signature returns `401`. Confirmed live.
-- Hyperswitch DOES generate + sign the outgoing events: the dashboard shows `payment_succeeded` events
-  with a real `X-Webhook-Signature-512` header and the full signed body, for the webhook URL configured
-  on the business profile (with `payment_succeeded_enabled`).
-- BUT every delivery attempt (initial + automatic retries + a manual retry) fails on Hyperswitch's side
-  with `500 · WebhookCallFailed` (Is Error: true). Cloud Run request logs show ZERO
-  `Hyperswitch-Backend-Server` hits — so the outbound call never reaches the endpoint. This is an egress
-  limitation of the shared Hyperswitch SANDBOX, not a fault in the receiver.
-- Net: the Hyperswitch->Metanoia webhook is proven correct on the receiving + signing sides; only the
-  sandbox's outbound HTTP delivery to an external URL cannot complete. The endpoint is ready the moment
-  delivery works (e.g. self-hosted Hyperswitch, or a production account without the sandbox egress block).
+- Receiver PROVEN: the deployed `/api/webhooks` verifies signed events - a correct HMAC-SHA512 payload
+  (Secret-Manager hash key) returns `200`; bad/missing signature returns `401`. Live.
+- Hyperswitch generates + signs the events (real `X-Webhook-Signature-512` + full body) and CAN deliver
+  outbound: a neutral-collector test (webhook.site) received a `POST` from `Hyperswitch-Backend-Server`
+  within seconds. So Hyperswitch's outbound delivery is NOT the blocker.
+- Yet Hyperswitch -> our Cloud Run endpoint never lands. Verified on OUR side: exact `status.url` used,
+  `allUsers` has `roles/run.invoker`, ingress `all`, instance pre-warmed (min-instances tested at 1),
+  both URL forms - and Cloud Run REQUEST logs show ZERO `Hyperswitch-Backend-Server` hits while every
+  Hyperswitch attempt records `500 WebhookCallFailed`. node/browser reach the endpoint fine (200/401/405).
+- Ruled out: app code, cold start, URL format, public-access IAM, ingress. What remains is a transport-
+  layer reachability gap between Hyperswitch's sandbox egress and Cloud Run's `*.run.app` frontend
+  (candidates: TLS/SNI, HTTP/2, or IPv6 - unconfirmed without Hyperswitch-side network visibility).
+- To land a real delivery: front the app with an HTTPS load balancer / custom domain (stable IPv4) or a
+  CDN-proxied endpoint, or use self-hosted / production Hyperswitch. Receiver is ready the instant it lands.
 
 ### Teardown
 
