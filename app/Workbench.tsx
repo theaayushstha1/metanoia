@@ -6,6 +6,7 @@ import MemoryPanel from "./MemoryPanel";
 import { useRouter } from "next/navigation";
 import { Icon, Mark, Pill, LiveDot, TopBar, usd } from "./components/ui";
 import { catalogStats } from "@/lib/catalog";
+import { plain } from "@/lib/plain";
 
 /* ── types (mirror /api/agent/plan) ───────────────────────────────────── */
 interface Candidate {
@@ -1318,7 +1319,7 @@ function AgentResult({
               </span>
             </div>
             <p style={{ margin: "8px 0 0", fontSize: 13.5, lineHeight: 1.55, color: "var(--muted)" }}>
-              {result.proposal?.reasoning ?? "Highest deterministic score among plans that satisfy the request and mandate."}
+              {plain(result.proposal?.reasoning) || "Highest deterministic score among plans that satisfy the request and mandate."}
             </p>
             <div style={{ marginTop: 20 }}>
               <div className="font-mono" style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 500, letterSpacing: ".08em", color: "var(--muted)", marginBottom: 8 }}>
@@ -1474,7 +1475,7 @@ function DecisionAuthority({ decision, candidates }: { decision: Decision; candi
         {overrode && (
           <div style={{ marginTop: 10, display: "flex", alignItems: "flex-start", gap: 9, border: "1px solid var(--red-2)", background: "var(--red-bg)", borderRadius: 10, padding: "11px 14px" }}>
             <span className="font-mono" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", color: "var(--red)", background: "#fff", border: "1px solid var(--red-2)", borderRadius: 99, padding: "3px 9px", flex: "none" }}>SERVER OVERRIDE</span>
-            <span style={{ fontSize: 11.5, lineHeight: 1.5, color: "var(--ink)" }}>{decision.note ?? "The server chose a different plan than the model."}</span>
+            <span style={{ fontSize: 11.5, lineHeight: 1.5, color: "var(--ink)" }}>{plain(decision.note) || "The server chose a different plan than the model."}</span>
           </div>
         )}
 
@@ -1546,7 +1547,7 @@ function MarketReferences({ scouts }: { scouts: ScoutReport[] }) {
                     RESEARCH ONLY
                   </span>
                 </div>
-                <p style={{ margin: "6px 0 0", fontSize: 12, lineHeight: 1.5, color: "var(--muted)" }}>{ref.claim}</p>
+                <p style={{ margin: "6px 0 0", fontSize: 12, lineHeight: 1.5, color: "var(--muted)" }}>{plain(ref.claim)}</p>
                 <div className="font-mono" style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 9, fontSize: 9.5, color: "var(--faint)", flexWrap: "wrap" }}>
                   {ref.source_url ? (
                     <a href={ref.source_url} target="_blank" rel="noreferrer" style={{ color: blue, textDecoration: "none" }}>{hostOf(ref.source_url)}</a>
@@ -1561,7 +1562,7 @@ function MarketReferences({ scouts }: { scouts: ScoutReport[] }) {
         ) : market.summary ? (
           <div style={{ border: "1px solid var(--line-2)", borderRadius: 10, background: "#fff", padding: "12px 14px" }}>
             <div className="font-mono" style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: ".06em", color: "#b8862b" }}>GROUNDED MARKET SCAN</div>
-            <p style={{ margin: "6px 0 0", fontSize: 12, lineHeight: 1.55, color: "var(--muted)" }}>{market.summary}</p>
+            <p style={{ margin: "6px 0 0", fontSize: 12, lineHeight: 1.55, color: "var(--muted)" }}>{plain(market.summary)}</p>
             <p className="font-mono" style={{ margin: "8px 0 0", fontSize: 9, color: "var(--faint)" }}>Pooled grounding sources below; not tied to a single claim.</p>
             <div className="font-mono" style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 6, fontSize: 9.5, color: "var(--faint)", flexWrap: "wrap" }}>
               {grounding.length > 0 ? (
@@ -1616,20 +1617,20 @@ function ScoutPanel({ scouts, candidates }: { scouts: ScoutReport[]; candidates:
                 </span>
               </div>
               <h3 style={{ margin: "9px 0 0", fontFamily: disp, fontSize: 16, lineHeight: 1.2, letterSpacing: 0 }}>
-                {winner ?? scout.headline}
+                {winner ?? plain(scout.headline)}
               </h3>
               {winner && (
                 <div className="font-mono" style={{ marginTop: 4, fontSize: 9, color: "var(--faint)" }}>
-                  {scout.headline}
+                  {plain(scout.headline)}
                 </div>
               )}
               <p style={{ margin: "9px 0 0", fontSize: 11.5, lineHeight: 1.5, color: "var(--muted)" }}>
-                {winnerObservation?.evidence ?? scout.summary}
+                {plain(winnerObservation?.evidence ?? scout.summary)}
               </p>
               {scout.external_signals.slice(0, 2).map((ref, refIndex) => (
                 <div key={`${ref.provider}-${refIndex}`} style={{ marginTop: 9, paddingTop: 9, borderTop: "1px solid var(--line-2)" }}>
                   <strong style={{ display: "block", fontSize: 11.5 }}>{ref.provider}</strong>
-                  <span style={{ display: "block", marginTop: 2, fontSize: 10.5, lineHeight: 1.4, color: "var(--muted)" }}>{ref.claim}</span>
+                  <span style={{ display: "block", marginTop: 2, fontSize: 10.5, lineHeight: 1.4, color: "var(--muted)" }}>{plain(ref.claim)}</span>
                   <span className="font-mono" style={{ display: "block", marginTop: 4, fontSize: 8.5 }}>
                     {ref.source_url ? (
                       <a href={ref.source_url} target="_blank" rel="noreferrer" style={{ color: blue }}>
@@ -1965,7 +1966,7 @@ function Refused({
   const plan = b?.plan;
   const checks = b?.verdict.checks ?? result.decision.verdict?.checks ?? [];
   const failCount = checks.filter((c) => !c.passed).length;
-  const reason = result.proposal?.reasoning ?? result.decision.note ?? "It exceeds your mandate.";
+  const reason = plain(result.proposal?.reasoning ?? result.decision.note) || "It exceeds your mandate.";
 
   // A real mandate denial is defined by a FAILING SpendGuard check — not merely by
   // "blocked" being set (the closest plan can pass the mandate yet still not be a real
