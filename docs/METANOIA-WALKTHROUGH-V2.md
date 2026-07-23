@@ -2,7 +2,7 @@
 title: "Metanoia — Technical Walkthrough (Version 2)"
 subtitle: "Autonomous, mandate-bound procurement for API/software subscriptions, settled through Juspay Hyperswitch — deployed on Google Cloud"
 author: "Aayush Shrestha"
-date: "2026-07-23 · code snapshot commit 30284da"
+date: "2026-07-23 · code snapshot commit 4dfc45b"
 ---
 
 > **How to read this guide.** This is a detailed learning companion, written to be understood when read
@@ -705,5 +705,5 @@ import with repository code analysis.
 
 ---
 
-*Generated from `docs/METANOIA-WALKTHROUGH-V2.md`. Code snapshot: commit `30284da`. No credentials, secrets,
+*Generated from `docs/METANOIA-WALKTHROUGH-V2.md`. Code snapshot: commit `4dfc45b`. No credentials, secrets,
 database passwords, or full API keys are included in this document.*
