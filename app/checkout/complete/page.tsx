@@ -12,6 +12,7 @@ import { CATALOG, getPlan, formatUsd, type Plan } from "@/lib/catalog";
 import { getSessionCustomerId } from "@/lib/session";
 import { TopBar, Pill, LiveDot, usd } from "../../components/ui";
 import PaymentTrace, { type TraceStep } from "./PaymentTrace";
+import PaymentDetails from "./PaymentDetails";
 import RenewPanel from "./RenewPanel";
 import { getSessionIntentMandate } from "@/lib/mandate-session";
 
@@ -45,11 +46,13 @@ export default async function CompletePage({
   let connector: string | undefined;
   let amountCents: number | undefined;
   let verifyError: string | null = null;
+  let payment: PaymentResponse | null = null;
   const sessionCustomer = await getSessionCustomerId();
 
   if (payment_id) {
     try {
       const p = await getPayment(payment_id);
+      payment = p;
       status = p.status;
       connector = p.connector;
       amountCents = p.amount;
@@ -85,6 +88,15 @@ export default async function CompletePage({
   const now = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
   const amountLabel = formatUsd(amountCents ?? plan?.priceCents ?? 0);
   const credShort = credential ? `${credential.slice(0, 8)}…${credential.slice(-4)}` : "not issued";
+
+  // Non-sensitive card metadata + a deep link to this exact payment in the Hyperswitch dashboard.
+  const card = payment?.payment_method_data?.card;
+  const cardLabel = card?.last4 ? `${card.card_network ?? "Card"} •••• ${card.last4}` : (payment?.payment_method_type ?? "card");
+  const dashboardBase = process.env.HYPERSWITCH_DASHBOARD_URL || "https://app.hyperswitch.io";
+  const dashboardUrl =
+    payment?.profile_id && payment?.merchant_id
+      ? `${dashboardBase}/dashboard/payments/${payment.payment_id}/${payment.profile_id}/${payment.merchant_id}`
+      : undefined;
 
   // The real, in-order lifecycle this payment cleared — every line is settled data.
   const trace: TraceStep[] = [
@@ -140,6 +152,7 @@ export default async function CompletePage({
             </Link>
           </div>
         ) : (
+          <>
           <div className="mn-receipt-grid" style={{ display: "grid", gridTemplateColumns: "minmax(420px, 42%) 1fr", minHeight: "calc(100vh - 58px)" }}>
             {/* LEFT — payment summary, a full-height brand panel */}
             <div style={{ position: "relative", overflow: "hidden", background: "linear-gradient(160deg,#3d7bff 0%,#2b6bf3 46%,#1a3fa0 100%)", color: "#fff", padding: "48px 54px", display: "flex", flexDirection: "column", justifyContent: "center", animation: "rise .6s .05s both" }}>
@@ -176,6 +189,7 @@ export default async function CompletePage({
                     ["AMOUNT", `${formatUsd(amountCents ?? plan?.priceCents ?? 0)} / mo`, true],
                     ["PAYMENT ID", payment_id ?? "n/a", false],
                     ["CONNECTOR", connector ?? "n/a", false],
+                    ["CARD", cardLabel, false],
                     ["DATE", now, false],
                   ] as [string, string, boolean][]).map(([k, v, big]) => (
                     <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16 }}>
@@ -224,6 +238,32 @@ export default async function CompletePage({
               </div>
             </div>
           </div>
+            <PaymentDetails
+              paymentId={payment_id!}
+              status={status ?? "n/a"}
+              amountCents={amountCents ?? plan?.priceCents ?? 0}
+              amountReceivedCents={payment?.amount_received}
+              netAmountCents={payment?.net_amount}
+              currency={payment?.currency}
+              connector={connector}
+              connectorTxnId={payment?.connector_transaction_id}
+              merchantConnectorId={payment?.merchant_connector_id}
+              paymentMethod={payment?.payment_method}
+              paymentMethodType={payment?.payment_method_type}
+              authenticationType={payment?.authentication_type}
+              captureMethod={payment?.capture_method}
+              created={payment?.created}
+              updated={payment?.updated ?? payment?.modified_at}
+              errorMessage={payment?.error_message}
+              card={card}
+              merchantId={payment?.merchant_id}
+              profileId={payment?.profile_id}
+              customerId={payment?.customer_id}
+              attemptCount={payment?.attempt_count}
+              dashboardUrl={dashboardUrl}
+              plan={plan}
+            />
+          </>
         )}
       </div>
     </main>

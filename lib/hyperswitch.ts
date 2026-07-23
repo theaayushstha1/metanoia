@@ -39,6 +39,17 @@ export type PaymentStatus =
   | "partially_captured"
   | "expired";
 
+/** Non-sensitive card metadata Hyperswitch returns on a retrieved payment (never PAN/CVV). */
+export interface HyperswitchCard {
+  last4?: string;
+  card_network?: string;
+  card_type?: string;
+  card_issuer?: string;
+  card_issuing_country?: string;
+  card_exp_month?: string;
+  card_exp_year?: string;
+}
+
 export interface PaymentResponse {
   payment_id: string;
   status: PaymentStatus;
@@ -49,6 +60,26 @@ export interface PaymentResponse {
   currency: string;
   error_message?: string;
   connector?: string;
+  // Additional fields the Payments Retrieve API returns; all safe to display on a receipt.
+  amount_received?: number;
+  net_amount?: number;
+  amount_capturable?: number;
+  connector_transaction_id?: string;
+  payment_method?: string;
+  payment_method_type?: string;
+  authentication_type?: string;
+  capture_method?: string;
+  created?: string;
+  modified_at?: string;
+  updated?: string;
+  merchant_id?: string;
+  profile_id?: string;
+  merchant_connector_id?: string;
+  customer_id?: string;
+  attempt_count?: number;
+  unified_code?: string;
+  unified_message?: string;
+  payment_method_data?: { card?: HyperswitchCard; [key: string]: unknown };
   [key: string]: unknown;
 }
 
