@@ -1,10 +1,30 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+const appUrl = "https://metanoia-e3w3a6ohka-ue.a.run.app";
+const description =
+  "Give your agent a budget, not your card. Metanoia uses deterministic ranking and spending controls to procure API subscriptions through Juspay Hyperswitch.";
+
 export const metadata: Metadata = {
-  title: "Metanoia · autonomous subscription procurement on Hyperswitch",
-  description:
-    "Give your agent a budget, not your card. Metanoia manages an AI team's API/software subscriptions under a spending mandate, buying and renewing through Juspay Hyperswitch and refusing anything outside policy.",
+  metadataBase: new URL(appUrl),
+  title: "Metanoia | AI Subscription Procurement on Hyperswitch",
+  description,
+  applicationName: "Metanoia",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    url: appUrl,
+    siteName: "Metanoia",
+    title: "Metanoia | AI Subscription Procurement on Hyperswitch",
+    description,
+  },
+  twitter: {
+    card: "summary",
+    title: "Metanoia | AI Subscription Procurement on Hyperswitch",
+    description,
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

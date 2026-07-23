@@ -2,6 +2,7 @@
   "name": "metanoia",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://metanoia-e3w3a6ohka-ue.a.run.app",
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
