@@ -2,7 +2,7 @@
 title: "Metanoia — Technical Walkthrough (Version 2)"
 subtitle: "Autonomous, mandate-bound procurement for API/software subscriptions, settled through Juspay Hyperswitch — deployed on Google Cloud"
 author: "Aayush Shrestha"
-date: "2026-07-23 · code snapshot commit 4dfc45b"
+date: "2026-07-23 · code snapshot commit afb7b52"
 ---
 
 > **How to read this guide.** This is a detailed learning companion, written to be understood when read
@@ -96,9 +96,14 @@ When you confirm, the browser goes to **Checkout**, which runs the spending gate
 mounts Hyperswitch's Unified Checkout. You type the test card into Hyperswitch's own secure iframe; the card
 never touches Metanoia's server. On success you land on the **Receipt**, which verifies the payment
 authoritatively, records the subscription, issues a scoped credential, and then makes a real authenticated
-call to the purchased capability and shows the response. If you opted into memory, the run is remembered so
-the next one is personalized. **[PROVEN]** end to end, both locally and on the live Cloud Run deployment
-(a real in-browser checkout was completed against the deployed app).
+call to the purchased capability and shows the response. The current code also mirrors the non-sensitive
+payment record returned by Hyperswitch — amounts, status, connector, timestamps, transaction identifiers, and
+masked card metadata — rather than inventing receipt details. If you opted into memory, the run is remembered
+so the next one is personalized. The core journey is **[PROVEN]** end to end, both locally and on the live
+Cloud Run deployment. The expanded payment record is in commit `cedc109`; commit `416e3d7` blocks
+cross-session settlement and rendering, and commit `afb7b52` adds automated receipt-ownership tests and
+extracts a testable `ownsPayment` helper. The fix is deployed and verified live (a foreign `payment_id`
+shows nothing).
 
 ---
 
@@ -258,6 +263,17 @@ endpoint, which returns the data only if the credential is valid and matches the
 to be honest that the provider is an **internal authenticated sandbox mock**, not a real outside company.
 **[PROVEN]** — a valid credential returns 200; a missing or wrong one returns 401.
 
+The receipt also shows a **full payment record pulled live from the Hyperswitch Payments API** — the same
+record the Hyperswitch dashboard shows: amount received and net amount, the connector transaction ID, the
+merchant connector, the authentication type and capture method, the created and updated timestamps, and the
+non-sensitive card metadata (network, last four, card type, issuer, country, expiry), plus a deep link that
+opens that exact payment in the Hyperswitch dashboard. Every value is retrieved server-side, not stored by
+us, and the PCI boundary holds: the card PAN and CVV never reach our server; only the network and last four,
+which the processor returns for the receipt, are displayed. **[PROVEN LOCALLY]** — rendered from a real
+retrieved payment. **[MANUALLY VERIFIED]** — commit `416e3d7` compares the retrieved payment's customer to the
+browser session before settlement or rendering and showed no record to a foreign session. Automated
+cross-session receipt tests are still missing, as explained in section 8.2.
+
 ## 5.6 Refunds, cancellations, and resubscriptions
 
 Plain English: you can refund a payment, cancel a subscription, and resubscribe, and each of these behaves
@@ -365,7 +381,82 @@ an event for an unknown payment is **retained** for later reconciliation rather 
 a real gap here (see the bugs section) so that a retained event can actually be recovered, and added a sweep
 that re-attempts retained events whose payment later becomes known. **[PROVEN]** for signature verification on
 the deployed endpoint (valid -> 200, invalid -> 401); the settlement-from-a-real-delivery path is discussed
-honestly in section 12.
+honestly in section 13.
+
+## 8.2 Crash safety, duplicate-charge safety, and the remaining gaps
+
+Plain English: the initial checkout is arranged so the server cannot charge a card before it has a record of
+the attempt. The recurring path also writes a pending record before trying an off-session charge. Stable
+payment IDs and database keys make retries converge on one logical payment. Those protections are real, but
+recovery is not yet complete in every failure window.
+
+For the **initial customer checkout**, the server first creates an *unconfirmed* Hyperswitch intent, records a
+pending attempt in Cloud SQL, and only then gives the browser the client secret that can confirm the card. If
+the server crashes before recording, no card has been confirmed and no money has moved. A retry uses the same
+merchant payment ID and retrieves the existing live intent. If the browser confirms successfully but the
+receipt request is interrupted, the durable pending row remains; revisiting the receipt retrieves the
+authoritative Hyperswitch status and settles it. A webhook could also settle it, but the real
+Hyperswitch-to-Cloud-Run delivery gap means unattended webhook recovery is not yet proven.
+
+For a **renewal**, the code is pending-first: write the attempt, call the off-session charge with the same
+stable per-period payment ID, then mark only terminal outcomes. A crash after the processor charge therefore
+leaves an auditable pending row rather than an invisible charge. However, there is no scheduler or general
+poller that retrieves stale pending renewals, and the real webhook delivery has not landed. So the design
+prevents a lost *record*, but does not yet guarantee automatic final reconciliation after a real crash.
+
+Duplicate protection has several layers: one stable payment ID per logical attempt; a primary key on payment
+attempts; one active subscription row per customer and plan; one event row per webhook event ID; and
+idempotent subscription settlement. The initial-checkout client also recovers Hyperswitch's "already exists"
+response by retrieving the existing intent. One gap remains in the recurring client: `chargeSavedMethod` does
+not yet recover the equivalent duplicate-ID response. The renewal test proves that retries derive the same ID
+and do not duplicate the subscription row, but its fake connector accepts both calls; it does **not** prove
+that only one provider call or one real charge occurs. That needs an explicit duplicate-response test and
+retrieve-existing recovery before recurring idempotency is called end-to-end proven.
+
+One newly discovered security correction was addressed while this guide was being reviewed. The
+expanded receipt originally retrieved the URL's payment ID, rendered its metadata, and could settle it without
+first matching the payment's customer to the browser session. Commit `416e3d7` now compares
+the authoritative `customer_id` before settlement or rendering and returns a neutral not-found state on a
+mismatch. That closes the direct disclosure and cross-session settlement path and was manually verified, but
+automated owner, cross-session, anonymous, and unknown-payment tests are still required. A stronger version
+would first check an owned local attempt and use remote retrieval only in the explicit recovery branch, which
+would also reduce arbitrary-ID lookup and rate-abuse risk. Refund and lab routes already enforce ownership.
+
+## 8.3 Renewal audit: what exists, what is tested, and what is still missing
+
+There is a dedicated payments and renewal review in `PAYMENT-AUDIT.md`. It was useful for finding the
+pending-first, retained-webhook, and in-flight-status bugs, but parts of its deployment and session wording
+predate Cloud SQL and per-browser isolation. Treat this Version 2 guide as the current summary.
+
+The renewal path currently does four correct things: it requires a saved payment method; re-runs SpendGuard
+against the **current** plan price; excludes the plan being renewed so it is not counted twice; and records a
+pending attempt before the charge. Unit tests prove refusal without a saved method, correct no-double-count
+math, refusal after a price increase breaches the cap, stable per-period IDs, and a single subscription row.
+
+What remains unproven is the actual financial lifecycle: Fauxpay does not return a reusable method, Stripe is
+blocked by its raw-card capability, there is no automatic `next_billing_at` scheduler, duplicate-ID recovery
+is missing from the renewal client, and stale pending renewals are not polled to completion. Therefore the
+accurate label is **renewal architecture coded and unit-tested, but real MIT, automatic scheduling, and crash
+recovery are not proven**.
+
+## 8.4 AP2: how much is real, and what would make it protocol-complete
+
+Metanoia is **AP2-inspired, not AP2-complete**. The live application uses an AP2-shaped `IntentMandate` with
+the user's natural-language instruction, expiry, confirmation requirement, and Metanoia's richer `policy`
+extension for monthly cap, per-charge cap, allowlists, and maximum subscriptions. That object is passed into
+procurement, deterministic ranking, SpendGuard, checkout, and renewal, so the intent shape is not decorative.
+The AP2-shaped `CartItem` is also the object SpendGuard evaluates.
+
+The rest is scaffolding. A `CartMandate` schema exists, including a placeholder `merchant_authorization`, but
+the live flow does not construct, sign, persist, or verify a Cart Mandate. There is no Payment Mandate, no
+canonical cart hash, no signed JWT/JWS, no key ID or issuer/verifier trust model, no replay nonce, and no
+external AP2 interoperability test. Calling the current system "AP2 compliant" would therefore be wrong.
+
+To finish AP2 later: create the Intent, Cart, and Payment Mandates as versioned artifacts; bind the cart to
+the exact catalog price, customer/session, payment ID, expiry, and merchant; sign a canonical hash; verify the
+signature and expiry at checkout and renewal; persist the artifact and verification result; and add tests for
+tampering, replay, expiry, wrong signer, and cart/payment mismatch. That is valuable roadmap work, but it is
+not required to prove this take-home's core Hyperswitch payment flow.
 
 ---
 
@@ -415,9 +506,10 @@ on Vertex.
 
 ---
 
-# 10. Every important bug found, and how it was corrected
+# 10. Important bugs, fixes, and two open audit findings
 
-Plain English: this section is the engineering diary. Each entry is a real defect and the fix.
+Plain English: this section is the engineering diary. The first eleven entries are corrected defects. The
+last two are findings from the Version 2 review that must remain open until code and tests prove the fix.
 
 1. **Renewal could lose a payment on a crash.** The renewal charged first and recorded afterward, so a crash
    between the charge and the record would lose the payment. **Fix:** pending-first — write a durable pending
@@ -458,6 +550,16 @@ Plain English: this section is the engineering diary. Each entry is a real defec
 11. **A misleading receipt label.** The receipt timeline hard-coded "webhook pending deployment," which stayed
     stale after deploying. **Fix:** relabel to an honest "webhook receiver verified; awaiting delivery."
     **[PROVEN]** (copy fixed).
+12. **The expanded receipt was not ownership-gated.** Commit `cedc109` could render and settle a retrieved
+    payment before matching its customer to the browser session. **Fix in `416e3d7`:** compare the
+    authoritative payment customer before settlement or rendering and show a neutral not-found state on a
+    mismatch. **Automated coverage in `afb7b52`:** the check was extracted into a pure `ownsPayment` helper
+    with tests for owner, cross-session, anonymous, unknown-payment, and tampered-id cases; the fix is deployed
+    and verified live. **[PROVEN]** (guard fixed, tested, deployed).
+13. **The renewal idempotency test overstates what it proves.** It proves the same retry ID and one subscription
+    row, but the fake connector accepts two charge calls, while the real renewal client does not recover an
+    "already exists" response. **Open fix:** make the fake connector reject the duplicate like Hyperswitch,
+    assert the existing payment is retrieved, and prove no second logical charge is created. **[OPEN]**
 
 ---
 
@@ -466,7 +568,7 @@ Plain English: this section is the engineering diary. Each entry is a real defec
 Plain English: the automated tests run on the fast in-memory backend and check the parts that must never
 break. These are the real current numbers from this repository.
 
-- `npm test` -> **82 passing tests across 16 test files.** **[PROVEN]**
+- `npm test` -> **87 passing tests across 16 test files.** **[PROVEN]**
 - `npx tsc --noEmit` -> clean (no type errors). **[PROVEN]**
 - `npm run lint` -> clean (no warnings). **[PROVEN]**
 
@@ -475,7 +577,8 @@ ranking math (three choices, compliant pick, hard-failure flags, over-cap refusa
 boundary (server uses server prices, cannot be tricked into an over-cap plan, agent imports no payment
 functions); checkout (refuses over-cap without calling Hyperswitch, idempotent, ignores stale events, and the
 new resubscribe-after-cancel behavior); renewal (no double-count, refuses on a raised price, 409 without a
-saved method, idempotent); the scouts (output sanitized to shortlisted plans, lens scoping correct);
+saved method, stable retry ID and one subscription row — but not yet provider-level duplicate recovery); the
+scouts (output sanitized to shortlisted plans, lens scoping correct);
 preference memory (nothing stored without consent, deterministic profile synthesis, forget-all wipes state);
 webhook reconciliation (retained events recover on redelivery and via the sweep, and preserve their
 metadata); refunds (ownership refused with 403, non-succeeded refused with 409, idempotent duplicate,
@@ -503,8 +606,12 @@ and Cloud SQL paths coded but unobserved. Here is what is different now.
 - **Refunds, cancellation, and resubscription** were added and made correct and idempotent, including the fix
   that resubscribing after a cancel charges again.
 - **Recurring consent** became a visible affordance in checkout.
+- **The receipt gained an authoritative Hyperswitch payment record** with amounts, status, connector,
+  transaction identifiers, timestamps, and masked card metadata. It is ownership-gated (`416e3d7`) with
+  automated cross-session, anonymous, and tampered-id tests (`afb7b52`), deployed and verified live.
 - **The webhook story was fully diagnosed** (section 13), including a neutral-collector control test.
-- **Eleven bugs were fixed** (section 10), several of them real payment-correctness issues.
+- **Eleven bugs were fixed and two current audit findings were recorded** (section 10), several of them real
+  payment-correctness or access-control issues.
 - **The marketplace expanded from 18 to 30 offers across 10 capabilities.** Four new categories were added —
   LLM inference, transactional email, observability, and authentication — each with three fictional vendors
   (budget, balanced, premium). Counts are now derived from the catalog, never hardcoded, and the same
@@ -516,7 +623,7 @@ and Cloud SQL paths coded but unobserved. Here is what is different now.
   And the offers are split into **PURCHASABLE SANDBOX OFFERS** (fictional, onboarded, ranked, checkout-eligible)
   versus research-only **REAL-MARKET REFERENCES** (real companies from the Market scout, labeled
   "RESEARCH ONLY, NOT PURCHASABLE", never selectable, marked "not verified" when no source backs them).
-- **Tests grew from 40 to 82** across 16 files, adding webhook reconciliation, refunds, session ownership,
+- **Tests grew from 40 to 87** across 16 files, adding webhook reconciliation, refunds, session ownership,
   mandate bounds, the catalog expansion (category recognition, ranking, refusal, refinement), and the
   Decision Authority override rendering.
 - **A payments audit document** was produced, grounded in official Hyperswitch documentation, correcting
@@ -544,14 +651,15 @@ Plain English: this is the honest ledger. Be precise here — it is the section 
 - The propose-versus-decide safety model, the deterministic ranker, and SpendGuard.
 - The agent cannot reach any payment function (test-enforced).
 - A real Fauxpay customer-initiated checkout settles, both locally and on the live deployment.
-- Stable payment IDs and idempotency (confirming twice records one subscription).
+- Stable initial-checkout payment IDs and idempotent local settlement (confirming twice records one
+  subscription). Provider-level duplicate recovery for renewals remains open.
 - Credential-gated capability proof: a valid credential returns 200, a bad or missing one returns 401.
 - Per-browser session isolation and cross-session refusal.
 - One real refund against the sandbox, plus the refund guardrail logic.
 - Cancellation frees budget and revokes the credential; resubscribe-after-cancel charges again.
 - The webhook **receiver**: it accepts valid signatures and rejects invalid ones on the deployed endpoint.
 - Deployment: Cloud Run + Cloud SQL + Vertex + Secret Manager, verified working.
-- 82 passing tests, clean type-check, clean lint.
+- 87 passing tests, clean type-check, clean lint.
 
 ## 13.2 The exact limitations, stated precisely
 
@@ -563,6 +671,16 @@ Plain English: this is the honest ledger. Be precise here — it is the section 
   request. So routing to Stripe was demonstrated, but a Stripe authorization was not.
 - **The renewal scheduler is deferred.** There is no background job that charges subscriptions when they are
   due; renewal is a manual, on-demand action. Automatic recurring is therefore not demonstrated.
+- **Renewal crash recovery is incomplete.** Pending-first storage leaves an audit row, but there is no general
+  poller for stale pending renewals and the real webhook delivery has not landed.
+- **Renewal duplicate recovery is incomplete.** The same per-period payment ID is derived on retry, but the
+  real renewal client does not yet recover Hyperswitch's duplicate-ID response by retrieving the existing
+  payment, and the unit test does not model that response.
+- **The receipt ownership guard is fixed, tested, and deployed.** Commit `416e3d7` blocks settlement and
+  rendering when the retrieved payment's customer does not match the browser session; commit `afb7b52` adds a
+  pure `ownsPayment` helper with owner, cross-session, anonymous, unknown-payment, and tampered-id tests, and
+  the fix is verified live on the deployment. (A possible future refinement: check a local owned attempt
+  before the remote retrieval, except on the recovery path, to reduce arbitrary-ID lookups.)
 - **The webhook receiver accepts valid signatures and rejects invalid ones.** That much is proven on the
   deployed endpoint.
 - **Hyperswitch successfully delivered a webhook to a neutral third-party collector.** In a control test,
@@ -667,8 +785,9 @@ import with repository code analysis.
   sandbox provider labeled as a sandbox; and a webhook story that was *diagnosed* with a neutral-collector
   control test instead of hand-waved. This honesty is more convincing to a payments team than a green
   checkmark that cannot be explained.
-- **Correctness pushed into the database.** Idempotency and webhook de-duplication are primary-key
-  constraints, not application checks, so they hold under concurrency.
+- **Correctness pushed into the database.** Payment-attempt uniqueness and webhook de-duplication are
+  primary-key constraints, not application checks, so duplicate records converge under concurrency. The
+  external processor call still needs its own duplicate-response recovery, especially for renewals.
 - **Least-privilege, secret-clean deployment.** A dedicated service account, secrets only in Secret Manager,
   nothing baked into the image or committed.
 
@@ -680,6 +799,8 @@ import with repository code analysis.
   unknown.
 - The vendors are fictional by design, so the demo proves the mechanism, not a third-party vendor integration.
 - The capability proof calls an internal sandbox provider, not a real outside API.
+- The expanded receipt's ownership guard is fixed (`416e3d7`), automated-tested (`afb7b52`), deployed, and
+  verified live.
 
 ## 15.3 Likely interviewer questions, with honest answers
 
@@ -702,8 +823,19 @@ import with repository code analysis.
 - **What breaks at scale?** In-memory state would be per-instance on serverless, which is why the durable path
   is Cloud SQL Postgres with idempotency and de-duplication as database constraints — and that path is now
   deployed.
+- **What if the server crashes during payment?** The customer checkout cannot confirm a card until a pending
+  attempt is durable, and a receipt revisit can retrieve and settle it. Renewals also write pending-first, but
+  automatic stale-pending recovery is not complete because the scheduler, provider duplicate recovery, and a
+  delivered webhook are still missing.
+- **How much AP2 is implemented?** The live system uses an AP2-shaped Intent Mandate and Cart Item throughout
+  ranking, SpendGuard, checkout, and renewal. The Cart Mandate is only a schema, and Payment Mandates,
+  signatures, canonical hashes, replay protection, and external interoperability are deferred. It is
+  AP2-inspired, not AP2-compliant.
+- **Why Drizzle and Cloud SQL?** Cloud SQL Postgres is the durable database. Drizzle is only the typed
+  schema/query layer used to access it; it is not a second database. Payment state lives in `public.*`, while
+  opt-in preference memory lives separately in `memory.*`.
 
 ---
 
-*Generated from `docs/METANOIA-WALKTHROUGH-V2.md`. Code snapshot: commit `4dfc45b`. No credentials, secrets,
+*Generated from `docs/METANOIA-WALKTHROUGH-V2.md`. Code snapshot: commit `afb7b52`. No credentials, secrets,
 database passwords, or full API keys are included in this document.*
