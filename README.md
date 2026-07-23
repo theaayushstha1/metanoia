@@ -6,7 +6,7 @@
 <h1 align="center">Metanoia</h1>
 
 <p align="center">
-  <b>An AI agent that buys and renews API/software subscriptions under a spending mandate — settled through Juspay Hyperswitch.</b><br/>
+  <b>An AI agent that buys and governs API/software subscriptions under a spending mandate — settled through Juspay Hyperswitch.</b><br/>
   <i>The model proposes. A deterministic server decides. Nothing unverified moves money.</i>
 </p>
 
@@ -18,11 +18,12 @@
   <img alt="Gemini" src="https://img.shields.io/badge/Gemini%203.1%20Pro-Vertex%20AI-4285F4?logo=googlecloud&logoColor=white">
   <img alt="Hyperswitch" src="https://img.shields.io/badge/Payments-Juspay%20Hyperswitch-2b6bf3">
   <img alt="Drizzle" src="https://img.shields.io/badge/Drizzle-Cloud%20SQL%20Postgres-C5F74F?logo=drizzle&logoColor=black">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-44%2F44%20passing-3fb950?logo=vitest&logoColor=white">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-95%2F95%20passing-3fb950?logo=vitest&logoColor=white">
   <img alt="Status" src="https://img.shields.io/badge/status-sandbox%20prototype-f0b429">
 </p>
 
 <p align="center">
+  <a href="https://metanoia-e3w3a6ohka-ue.a.run.app">Live demo</a> ·
   <a href="#quickstart">Quickstart</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#the-two-things-that-make-it-safe">Safety</a> ·
@@ -58,7 +59,7 @@ flowchart LR
 
     subgraph AGENT["Agent layer — PROPOSES"]
         A["Gemini 3.1 Pro<br/>ToolLoopAgent"]
-        A -->|list_services| CAT[("Curated catalog<br/>18 offers")]
+        A -->|list_services| CAT[("Curated catalog<br/>30 offers · 10 capabilities")]
         A -->|check_mandate| SG1[SpendGuard]
         A -->|recommend| P["Structured proposal"]
     end
@@ -78,7 +79,7 @@ flowchart LR
     PICK --> C([You confirm]) --> HS
 
     subgraph PAY["Payment layer"]
-        HS["Juspay Hyperswitch<br/>Fauxpay CIT / Stripe MIT"]
+        HS["Juspay Hyperswitch<br/>Fauxpay CIT / Stripe MIT blocked"]
         HS --> CRED["Scoped credential issued"]
         CRED --> PROOF["Authenticated sandbox<br/>capability proof"]
     end
@@ -169,8 +170,8 @@ sequenceDiagram
 ```
 
 - **Idempotency:** merchant-supplied stable ids (`pay_` + 26 hex = 30 chars), seeded per `customer:plan:period`; retries reuse the id; `HE_01` self-heals.
-- **Webhooks:** raw-body HMAC (SHA-512/256, timing-safe) → dedupe by `event_id` → settle + upsert atomically; unknown events retained, never dropped.
-- **Honest boundary:** checkout uses **Fauxpay** (a dummy sandbox connector). Real off-session recurring (MIT) needs the **Stripe** path and is roadmap. *(see `lib/hyperswitch.ts`, `lib/checkout.ts`)*
+- **Webhooks:** real signed events pass through an HMAC-verifying ingress, are re-verified over the raw body by Cloud Run, deduped by `event_id`, and settled atomically in Cloud SQL; unknown events are retained, never dropped.
+- **Honest boundary:** checkout uses **Fauxpay** (a dummy sandbox connector). Real off-session recurring (MIT) needs the **Stripe** path and remains connector-blocked. *(see `lib/hyperswitch.ts`, `lib/checkout.ts`)*
 
 ---
 
@@ -256,11 +257,11 @@ On success the receipt makes a **real credentialed call** to the purchased capab
 - **Agentic procurement** — Gemini 3.1 Pro on Vertex proposes; a deterministic core decides.
 - **SpendGuard** — mandate enforced before any charge; refusals are explainable.
 - **Four advisory scouts** — price / value / quality / grounded market signal, in parallel.
-- **Real payment rails** — Juspay Hyperswitch (sandbox), idempotent, webhook-ready.
+- **Real payment rails** — Juspay Hyperswitch (sandbox), idempotent, with signed webhook settlement proven live.
 - **Buy-then-use loop** — a scoped credential + a live authenticated capability proof.
 - **Opt-in preference memory** — consent-gated, deletable, walled off from payments.
 - **Configurable mandate** — caps are editable in the workbench.
-- **44/44 tests** — the safety gate, ranking math, and idempotency are covered.
+- **95/95 tests** — the safety gate, ranking math, idempotency, ownership, refunds, and webhook recovery are covered.
 
 ---
 
@@ -273,7 +274,7 @@ On success the receipt makes a **real credentialed call** to the purchased capab
 | Decision core | Deterministic ranking + SpendGuard (pure, unit-tested) |
 | Payments | Juspay Hyperswitch (Unified Checkout SDK + server API), Fauxpay / Stripe connectors |
 | Storage | `Store` / `MemoryStore` interfaces · in-memory (disk-backed) · **Cloud SQL Postgres via Drizzle + cloud-sql-connector** |
-| Tests | Vitest (44 tests, 10 files) |
+| Tests | Vitest (95 tests, 17 files) |
 
 ---
 
@@ -290,18 +291,18 @@ cp .env.local.example .env.local
 # GOOGLE_VERTEX_PROJECT  (+ `gcloud auth application-default login` for local dev)
 
 npm run dev        # http://localhost:3000
-npm test           # 44/44
+npm test           # 95/95
 ```
 
 Test card at checkout: `4242 4242 4242 4242`, any future expiry, any CVC.
 
-> **Durable state (deploy):** set `CLOUD_SQL_*` in the environment, run `npm run db:migrate`, and the store switches from in-memory to Cloud SQL Postgres automatically.
+> **Durable state:** the live deployment uses Cloud SQL Postgres. For another deployment, set `CLOUD_SQL_*`, run `npm run db:migrate`, and the store switches from in-memory automatically.
 
 ---
 
 ## Testing
 
-`npm test` → **44/44 across 10 files** (plus `tsc` clean, `lint` clean). The suites prove the parts that must never break:
+`npm test` → **95/95 across 17 files** (plus `tsc` clean, `lint` clean). The suites prove the parts that must never break:
 
 - **can't overspend** — SpendGuard refuses over-cap purchases; checkout returns 403 without calling Hyperswitch.
 - **can't be tricked** — the server overrides an over-cap model pick; rejects hallucinated / wrong-capability plans.
@@ -317,14 +318,15 @@ Test card at checkout: `4242 4242 4242 4242`, any future expiry, any CVC.
 - Catalog vendors are **fictional sandbox offers**. Real brands appear only via the Market scout as `external_research`, never as purchasable.
 - Payment settles via **Fauxpay** (sandbox CIT). Real off-session **MIT / recurring** needs Stripe and is not yet proven.
 - **AP2** mandate *shapes* are modeled and enforced app-side; cryptographic signatures / JWTs are roadmap.
-- Cloud SQL Postgres backends are built but **not yet provisioned / deployed**.
+- The public app is deployed on **Cloud Run** with durable **Cloud SQL Postgres**, Vertex AI, and secrets mounted from Secret Manager.
+- Signed webhook delivery and settlement are live through a narrow HMAC-verifying ingress; real off-session MIT remains separate and unproven.
 
 ---
 
 ## Roadmap
 
-- **P0 — deploy the durable path:** provision Cloud SQL, run migrations, deploy publicly, observe one **signed** webhook.
-- **P1 — real recurring:** Stripe MIT off-session charge; decline-code-aware smart retries (Revenue Recovery).
+- **P0 — completed:** Cloud SQL migrations, public Cloud Run deployment, and real signed webhook settlement.
+- **P1 — real recurring:** Stripe MIT off-session charge, automatic renewal scheduler, and decline-code-aware smart retries (Revenue Recovery).
 - **P2 — protocol depth:** signed AP2 Checkout/Payment mandates (JWTs); x402 pay-per-call handshake; smart routing / connector failover; OAuth profile import.
 
 ---
@@ -335,6 +337,7 @@ Test card at checkout: `4242 4242 4242 4242`, any future expiry, any CVC.
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System, request-flow, payment, and data diagrams; storage design; component map. |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Architecture decision records — every major call, its alternatives, and tradeoffs. |
+| [`docs/submission/Metanoia-Architecture-Decisions.pdf`](docs/submission/Metanoia-Architecture-Decisions.pdf) | The recruiter-ready architecture and decisions document (3 pages). |
 | [`docs/METANOIA-WALKTHROUGH.md`](docs/METANOIA-WALKTHROUGH.md) · [PDF](docs/METANOIA-WALKTHROUGH.pdf) | The full 18-page technical walkthrough (also a great NotebookLM source). |
 
 ---
