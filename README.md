@@ -24,6 +24,7 @@
 
 <p align="center">
   <a href="https://metanoia-e3w3a6ohka-ue.a.run.app">Live demo</a> ·
+  <a href="https://github.com/theaayushstha1/metanoia/releases/tag/demo-v3">76-second demo video</a> ·
   <a href="#quickstart">Quickstart</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#the-two-things-that-make-it-safe">Safety</a> ·
