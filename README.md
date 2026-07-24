@@ -37,7 +37,9 @@
 ---
 
 <p align="center">
-  <img src="docs/assets/metanoia-demo.gif" alt="Metanoia demo: procurement, ranking, checkout, capability proof" width="90%" />
+  <a href="https://github.com/theaayushstha1/metanoia/releases/download/demo-v3/Metanoia-60s-Demo-v3.mp4">
+    <img src="docs/assets/metanoia-demo.gif" alt="Watch the Metanoia demo: procurement, ranking, checkout, capability proof" width="90%" />
+  </a>
 </p>
 
 ---
