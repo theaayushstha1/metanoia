@@ -15,10 +15,12 @@ export default function CheckoutForm({
   returnUrl,
   amountLabel,
   paymentId,
+  onRetry,
 }: {
   returnUrl: string;
   amountLabel?: string;
   paymentId?: string;
+  onRetry?: () => void;
 }) {
   const router = useRouter();
   const hyper = useHyper();
@@ -192,9 +194,21 @@ export default function CheckoutForm({
               {outcome.detail}
             </div>
             {outcome.tone === "error" && (
-              <div className="font-mono" style={{ marginTop: 6, fontSize: 10, letterSpacing: ".04em", color: "var(--faint)" }}>
-                NO CHARGE · CARD NEVER STORED · TRY ANOTHER CARD
-              </div>
+              <>
+                <div className="font-mono" style={{ marginTop: 6, fontSize: 10, letterSpacing: ".04em", color: "var(--faint)" }}>
+                  NO CHARGE · CARD NEVER STORED
+                </div>
+                {onRetry && (
+                  <button
+                    type="button"
+                    onClick={onRetry}
+                    className="font-body"
+                    style={{ marginTop: 11, fontSize: 12.5, fontWeight: 600, color: "#fff", background: "var(--red)", border: "none", borderRadius: 9, padding: "9px 16px", cursor: "pointer" }}
+                  >
+                    Try another card
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>

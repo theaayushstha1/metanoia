@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadHyper } from "@juspay-tech/hyper-js";
 import { HyperElements } from "@juspay-tech/react-hyper-js";
@@ -39,9 +39,16 @@ export default function CheckoutClient({
     KEY_READY ? "" : "Add your Hyperswitch publishable key to .env.local and restart the dev server."
   );
 
-  useEffect(() => {
+  // Create (or re-create) the payment intent. A declined Hyperswitch intent is
+  // terminal and cannot be re-confirmed, so a retry must mint a FRESH intent — the
+  // same thing a manual page refresh does. Resetting to the loading state remounts
+  // the card element cleanly with the new client secret.
+  const loadIntent = useCallback(() => {
     if (!KEY_READY) return;
-    let cancelled = false;
+    setError("");
+    setAlreadyPaidId(null);
+    setPaymentId(undefined);
+    setOptions({});
     fetch("/api/create-payment", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -49,7 +56,6 @@ export default function CheckoutClient({
     })
       .then((r) => r.json())
       .then((data) => {
-        if (cancelled) return;
         if (data.refused) setError(`Refused by the mandate: ${data.verdict?.summary ?? ""}`);
         else if (data.error) setError(data.error);
         else if (data.alreadyActive || data.status === "succeeded") {
@@ -64,13 +70,12 @@ export default function CheckoutClient({
           });
         }
       })
-      .catch((e) => {
-        if (!cancelled) setError(String(e));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [planId, router]);
+      .catch((e) => setError(String(e)));
+  }, [planId]);
+
+  useEffect(() => {
+    loadIntent();
+  }, [loadIntent]);
 
   if (error) {
     return (
@@ -131,11 +136,12 @@ export default function CheckoutClient({
   }
 
   return (
-    <HyperElements options={options} hyper={hyperPromise}>
+    <HyperElements key={paymentId} options={options} hyper={hyperPromise}>
       <CheckoutForm
         returnUrl={`${APP_URL}/checkout/complete?payment_id=${encodeURIComponent(paymentId ?? "")}`}
         amountLabel={amountLabel}
         paymentId={paymentId}
+        onRetry={loadIntent}
       />
     </HyperElements>
   );
